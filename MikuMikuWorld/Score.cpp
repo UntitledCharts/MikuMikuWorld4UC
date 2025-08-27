@@ -84,6 +84,16 @@ namespace MikuMikuWorld
 		unsigned int flags = reader->readUInt32();
 		note.critical = (bool)(flags & NOTE_CRITICAL);
 		note.friction = (bool)(flags & NOTE_FRICTION);
+
+		// dummynote
+		if (cyanvasVersion >= 6)
+		{
+			note.isDummy = reader->readInt32() != 0;
+		}
+		else
+		{
+			note.isDummy = false;
+		}
 		return note;
 	}
 
@@ -103,6 +113,9 @@ namespace MikuMikuWorld
 		if (note.friction)
 			flags |= NOTE_FRICTION;
 		writer->writeInt32(flags);
+
+		// dummynote
+		writer->writeInt32(note.isDummy ? 1 : 0);
 	}
 
 	ScoreMetadata readMetadata(BinaryReader* reader, int version, int cyanvasVersion)

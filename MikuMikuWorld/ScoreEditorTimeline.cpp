@@ -384,6 +384,27 @@ namespace MikuMikuWorld
 				}
 				ImGui::EndMenu();
 			}
+
+			if (ImGui::BeginMenu(getString("convert_guide_hold"), context.selectionHasHold()))
+			{
+				if (ImGui::MenuItem(getString("convert_guide_to_hold")))
+					context.convertGuideToHold();
+
+				if (ImGui::BeginMenu(getString("convert_hold_to_guide"),
+				                     context.selectionHasHold()))
+				{
+					for (int i = 0; i < arrayLength(guideColors); ++i)
+					{
+						char str[32];
+						sprintf_s(str, "guide_%s", guideColors[i]);
+						if (ImGui::MenuItem(getString(str)))
+							context.convertHoldToGuide((GuideColor)i);
+					}
+					ImGui::EndMenu();
+				}
+
+				ImGui::EndMenu();
+			}
 			ImGui::EndPopup();
 		}
 	}
@@ -2928,13 +2949,17 @@ namespace MikuMikuWorld
 		static auto singleNoteSEFunc = [&context, this](const Note& note, float notePlayTime)
 		{
 			bool playSE = true;
-			if (note.getType() == NoteType::Hold)
+			if (note.getType() == NoteType::Hold && !note.isDummy)
 			{
 				playSE = context.score.holdNotes.at(note.ID).startType == HoldNoteType::Normal;
 			}
 			else if (note.getType() == NoteType::HoldEnd)
 			{
 				playSE = context.score.holdNotes.at(note.parentID).endType == HoldNoteType::Normal;
+			}
+			else if (note.isDummy)
+			{
+				playSE = false;
 			}
 
 			if (playSE)

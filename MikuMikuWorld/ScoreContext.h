@@ -179,6 +179,10 @@ namespace MikuMikuWorld
 
 		void lerpHiSpeeds(int division, EaseType ease);
 
+		// ロングノーツ<->ガイドノーツ変換
+		void convertHoldToGuide(GuideColor color);
+		void convertGuideToHold();
+
 		void undo();
 		void redo();
 		void pushHistory(std::string description, const Score& prev, const Score& current);

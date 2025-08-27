@@ -686,6 +686,8 @@ namespace MikuMikuWorld
 					                                                    : "right";
 				}
 				obj["timeScaleGroup"] = note.layer;
+				if (note.isDummy)
+					obj["isdummy"] = true;
 				objects.push_back(obj);
 			}
 			else if (note.getType() == NoteType::Damage)
@@ -696,6 +698,8 @@ namespace MikuMikuWorld
 				obj["size"] = note.width / 2.0;
 				obj["lane"] = note.lane - 6 + (note.width / 2.0);
 				obj["timeScaleGroup"] = note.layer;
+				if (note.isDummy)
+					obj["isdummy"] = true;
 				objects.push_back(obj);
 			}
 		}
@@ -720,6 +724,8 @@ namespace MikuMikuWorld
 				startStep["lane"] = start.lane - 6 + (start.width / 2.0);
 				startStep["ease"] = easeNames[(int)note.start.ease];
 				startStep["timeScaleGroup"] = start.layer;
+				if (start.isDummy)
+					startStep["isdummy"] = true;
 				steps.push_back(startStep);
 
 				for (const auto& step : note.steps)
@@ -866,6 +872,10 @@ namespace MikuMikuWorld
 					note.flick = FlickType::None;
 				}
 				note.layer = obj["timeScaleGroup"].get<int>();
+				if (obj.contains("isdummy"))
+					note.isDummy = obj["isdummy"].get<bool>();
+				else
+					note.isDummy = false;
 				note.ID = Note::getNextID();
 				score.notes[note.ID] = note;
 			}

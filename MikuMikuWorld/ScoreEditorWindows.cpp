@@ -337,6 +337,16 @@ namespace MikuMikuWorld
 							}
 							edited = true;
 						}
+
+						if (UI::addCheckboxProperty(getString("isdummy"), note.isDummy))
+						{
+							for (auto& id : context.selectedNotes)
+							{
+								auto& n = context.score.notes.at(id);
+								n.isDummy = note.isDummy;
+							}
+							edited = true;
+						}
 					}
 
 					if (note.getType() == NoteType::HoldEnd && !isGuide)
@@ -392,6 +402,17 @@ namespace MikuMikuWorld
 					}
 					edited = true;
 				}
+
+				if (UI::addCheckboxProperty(getString("isdummy"), note.isDummy))
+				{
+					for (auto& id : context.selectedNotes)
+					{
+						auto& n = context.score.notes.at(id);
+						n.isDummy = note.isDummy;
+					}
+					edited = true;
+				}
+
 			}
 
 			UI::endPropertyColumns();
