@@ -1072,6 +1072,15 @@ namespace MikuMikuWorld
 				               : otherLayerTint,
 				           0, 0, context.showAllLayers || note.layer == context.selectedLayer);
 			}
+			if (note.getType() == NoteType::XNote)
+			{
+				updateNote(context, edit, note);
+				drawXNote(note, renderer,
+						  (context.showAllLayers || note.layer == context.selectedLayer)
+							  ? noteTint
+							  : otherLayerTint,
+				          0, 0, context.showAllLayers || note.layer == context.selectedLayer);
+			}
 		}
 
 		for (auto& [id, hold] : context.score.holdNotes)
@@ -1176,6 +1185,16 @@ namespace MikuMikuWorld
 						           context.showAllLayers || note.layer == context.selectedLayer);
 				}
 
+		for (const auto notes : { context.pasteData.notes, context.pasteData.XNotes })
+			for (const auto& [_, note] : notes)
+				if (isNoteVisible(note, hoverTick))
+				{
+					if (note.getType() == NoteType::XNote)
+						drawXNote(note, renderer, hoverTint, hoverTick,
+						          context.pasteData.offsetLane,
+						          context.showAllLayers || note.layer == context.selectedLayer);
+				}
+
 		for (const auto& [_, hold] : context.pasteData.holds)
 			drawHoldNote(context.pasteData.notes, hold, renderer, hoverTint, -1, hoverTick,
 			             context.pasteData.offsetLane);
@@ -1231,6 +1250,13 @@ namespace MikuMikuWorld
 			{
 				inputNotes.holdStart.friction = false;
 			}
+		}
+
+		if (currentMode == TimelineMode::InsertXNote)
+		{
+			inputNotes.XNote.tick = hoverTick;
+			inputNotes.XNote.lane = laneFromCenterPosition(score, hoverLane, edit.noteWidth);
+			inputNotes.XNote.width = edit.noteWidth;
 		}
 
 		inputNotes.damage.lane = lane;
@@ -1380,6 +1406,10 @@ namespace MikuMikuWorld
 			drawCcNote(inputNotes.damage, renderer, hoverTint);
 			break;
 
+		case TimelineMode::InsertXNote:
+			drawXNote(inputNotes.XNote, renderer, hoverTint);
+			break;
+			
 		default:
 			drawNote(inputNotes.tap, renderer, hoverTint);
 			break;
@@ -1419,6 +1449,9 @@ namespace MikuMikuWorld
 
 		case TimelineMode::InsertDamage:
 			insertDamage(context, edit);
+			break;
+		case TimelineMode::InsertXNote:
+			insertXNote(context, edit);
 			break;
 
 		default:
@@ -2450,6 +2483,52 @@ namespace MikuMikuWorld
 			drawFlickArrow(note, renderer, tint, offsetTick, offsetLane);
 	}
 
+	void ScoreEditorTimeline::drawXNote(const Note& note, Renderer* renderer, const Color& tint,
+	                                    const int offsetTick, const int offsetLane,
+	                                    const bool selectedLayer)
+	{
+		if (noteTextures.notes == -1)
+			return;
+
+		const Texture& tex = ResourceManager::textures[noteTextures.XNote];
+		int sprIndex = getXNoteSpriteIndex(note);
+		if (sprIndex < 0 || sprIndex >= tex.sprites.size())
+			return;
+
+		const Sprite& s = tex.sprites[sprIndex];
+
+		Vector2 pos{ laneToPosition(note.lane + offsetLane),
+			         getNoteYPosFromTick(note.tick + offsetTick) };
+		const Vector2 sliceSz(notesSliceSize, notesHeight);
+		const AnchorType anchor = AnchorType::MiddleLeft;
+
+		const float midLen =
+		    std::max(0.0f, (laneWidth * note.width) - (sliceSz.x * 2) + noteOffsetX + 5);
+		const Vector2 midSz{ midLen, notesHeight };
+
+		pos.x -= noteOffsetX;
+		const int left = s.getX() + noteCutoffX;
+		const int right = s.getX() + s.getWidth() - noteCutoffX;
+
+		const int z = (selectedLayer ? (int)ZIndex::zCount : 0) + 1;
+
+		// left slice
+		renderer->drawSprite(pos, 0.0f, sliceSz, anchor, tex, left, left + noteSliceWidth, s.getY(),
+		                     s.getY() + s.getHeight(), tint, z);
+		pos.x += sliceSz.x;
+
+		// middle
+		renderer->drawSprite(pos, 0.0f, midSz, anchor, tex, left + noteSliceWidth,
+		                     right - noteSliceWidth, s.getY(), s.getY() + s.getHeight(), tint, z);
+		pos.x += midLen;
+
+		// right slice
+		renderer->drawSprite(pos, 0.0f, sliceSz, anchor, tex, right - noteSliceWidth, right,
+		                     s.getY(), s.getY() + s.getHeight(), tint, z);
+
+		// frictionやflick等の追加が必要なら drawCcNote を参考に追加
+	}
+
 	bool ScoreEditorTimeline::bpmControl(const Score& score, const Tempo& tempo)
 	{
 		return bpmControl(score, tempo.bpm, tempo.tick, !playing);
@@ -2877,6 +2956,18 @@ namespace MikuMikuWorld
 
 		context.score.notes[newNote.ID] = newNote;
 		context.pushHistory("Insert damage", prev, context.score);
+	}
+
+	void ScoreEditorTimeline::insertXNote(ScoreContext& context, EditArgs& edit)
+	{
+		Score prev = context.score;
+
+		Note newNote = inputNotes.XNote;
+		newNote.ID = Note::getNextID();
+		newNote.layer = context.selectedLayer;
+
+		context.score.notes[newNote.ID] = newNote;
+		context.pushHistory("Insert XNote", prev, context.score);
 	}
 
 	void ScoreEditorTimeline::debug(ScoreContext& context)

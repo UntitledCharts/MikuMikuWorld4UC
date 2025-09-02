@@ -179,6 +179,7 @@
     <ClCompile Include="BinaryWriter.cpp" />
     <ClCompile Include="File.cpp" />
     <ClCompile Include="HistoryManager.cpp" />
+    <ClCompile Include="ImageCrop.h" />
     <ClCompile Include="ImGuiManager.cpp" />
     <ClCompile Include="ImGui\imgui.cpp" />
     <ClCompile Include="ImGui\imgui_demo.cpp" />

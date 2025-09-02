@@ -144,8 +144,9 @@ namespace MikuMikuWorld
 			Note holdEnd;
 			Note holdStep;
 			Note damage;
+			Note XNote;
 		} inputNotes{ Note(NoteType::Tap), Note(NoteType::Hold), Note(NoteType::HoldEnd),
-			          Note(NoteType::HoldMid), Note(NoteType::Damage) };
+			          Note(NoteType::HoldMid), Note(NoteType::Damage), Note(NoteType::XNote) };
 
 		struct NoteTransform
 		{
@@ -196,6 +197,11 @@ namespace MikuMikuWorld
 		void drawCcNote(const Note& note, Renderer* renderer, const Color& tint,
 		                const int offsetTick = 0, const int offsetLane = 0,
 		                const bool selectedLayer = true);
+
+		void drawXNote(const Note& note, Renderer* renderer, const Color& tint,
+		               const int offsetTick = 0, const int offsetLane = 0,
+		               const bool selectedLayer = true);
+
 		bool noteControl(ScoreContext& context, const Note& note, const ImVec2& pos,
 		                 const ImVec2& sz, const char* id, ImGuiMouseCursor cursor);
 		bool bpmControl(const Score& score, const Tempo& tempo);
@@ -223,6 +229,7 @@ namespace MikuMikuWorld
 		void insertHoldStep(ScoreContext& context, EditArgs& edit, int holdId);
 		void insertEvent(ScoreContext& context, EditArgs& edit);
 		void insertDamage(ScoreContext& context, EditArgs& edit);
+		void insertXNote(ScoreContext& context, EditArgs& edit);
 
 		void updateNoteSE(ScoreContext& context);
 

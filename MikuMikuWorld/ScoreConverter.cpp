@@ -136,10 +136,11 @@ namespace MikuMikuWorld
 		}
 
 		std::unordered_map<id_t, Note> notes;
-		notes.reserve(sus.taps.size());
+;
+		//notes.reserve(sus.taps.size());
 
 		std::unordered_map<id_t, HoldNote> holds;
-		holds.reserve(sus.slides.size());
+		//holds.reserve(sus.slides.size());
 
 		std::unordered_map<id_t, SkillTrigger> skills;
 		Fever fever{ -1, -1 };
@@ -227,7 +228,7 @@ namespace MikuMikuWorld
 
 				HoldNote hold;
 				int startID = Note::getNextID();
-				hold.steps.reserve(slide.size() - 2);
+				//hold.steps.reserve(slide.size() - 2);
 
 				for (const auto& note : slide)
 				{
@@ -357,7 +358,7 @@ namespace MikuMikuWorld
 		slideFillFunc(sus.guides, true);
 
 		std::vector<Tempo> tempos;
-		tempos.reserve(sus.bpms.size());
+		//tempos.reserve(sus.bpms.size());
 		if (sus.bpms.size() == 0)
 			tempos.push_back(Tempo(0, 120));
 		for (const auto& tempo : sus.bpms)
@@ -377,7 +378,7 @@ namespace MikuMikuWorld
 		for (const auto& group : sus.hiSpeedGroups)
 			for (const auto& change : group.hiSpeeds)
 				hiSpeedChangesCount++;
-		hiSpeedChanges.reserve(hiSpeedChangesCount);
+		//hiSpeedChanges.reserve(hiSpeedChangesCount);
 		int hiSpeedGroupIndex = -1;
 		for (const auto& speed : sus.hiSpeedGroups)
 		{
@@ -465,7 +466,7 @@ namespace MikuMikuWorld
 		   the same key to be critical.
 		*/
 		std::vector<HoldNote> exportHolds;
-		exportHolds.reserve(score.holdNotes.size());
+		//exportHolds.reserve(score.holdNotes.size());
 
 		for (const auto& [_, hold] : score.holdNotes)
 			exportHolds.emplace_back(hold);
@@ -477,7 +478,7 @@ namespace MikuMikuWorld
 		for (const auto& hold : exportHolds)
 		{
 			std::vector<SUSNote> slide;
-			slide.reserve(hold.steps.size() + 2);
+			//slide.reserve(hold.steps.size() + 2);
 
 			const Note& start = score.notes.at(hold.start.ID);
 
@@ -588,7 +589,7 @@ namespace MikuMikuWorld
 			barlengths.push_back(
 			    BarLength{ ts.measure, ((float)ts.numerator / (float)ts.denominator) * 4 });
 
-		hiSpeeds.reserve(score.hiSpeedChanges.size());
+		//hiSpeeds.reserve(score.hiSpeedChanges.size());
 		for (const auto& [_, hiSpeed] : score.hiSpeedChanges)
 			hiSpeeds.push_back(HiSpeed{ hiSpeed.tick, hiSpeed.speed });
 		SUSMetadata metadata;
@@ -702,6 +703,18 @@ namespace MikuMikuWorld
 					obj["isdummy"] = true;
 				objects.push_back(obj);
 			}
+			else if (note.getType() == NoteType::XNote)
+			{
+				json obj;
+				obj["type"] = "xnote";
+				obj["beat"] = note.tick / (double)TICKS_PER_BEAT;
+				obj["size"] = note.width / 2.0;
+				obj["lane"] = note.lane - 6 + (note.width / 2.0);
+				obj["timeScaleGroup"] = note.layer;
+				if (note.isDummy)
+					obj["isdummy"] = true;
+				objects.push_back(obj);
+			}
 		}
 		for (const auto& [_, note] : score.holdNotes)
 		{
@@ -716,7 +729,7 @@ namespace MikuMikuWorld
 				                                              : "out";
 
 				std::vector<json> steps;
-				steps.reserve(note.steps.size() + 1);
+				//steps.reserve(note.steps.size() + 1);
 
 				json startStep;
 				startStep["beat"] = start.tick / (double)TICKS_PER_BEAT;
@@ -758,7 +771,7 @@ namespace MikuMikuWorld
 			obj["critical"] = start.critical;
 
 			std::vector<json> steps;
-			steps.reserve(note.steps.size() + 1);
+			//steps.reserve(note.steps.size() + 1);
 			json startStep;
 			startStep["type"] = "start";
 			startStep["beat"] = start.tick / (double)TICKS_PER_BEAT;
@@ -886,6 +899,18 @@ namespace MikuMikuWorld
 				note.width = obj["size"].get<float>() * 2;
 				note.lane = obj["lane"].get<float>() + 6 - obj["size"].get<float>();
 				note.layer = obj["timeScaleGroup"].get<int>();
+				note.ID = Note::getNextID();
+				score.notes[note.ID] = note;
+			}
+			else if (obj["type"] == "xnote")
+			{
+				Note note(NoteType::XNote);
+				note.tick = obj["beat"].get<double>() * TICKS_PER_BEAT;
+				note.width = obj["size"].get<float>() * 2;
+				note.lane = obj["lane"].get<float>() + 6 - obj["size"].get<float>();
+				note.layer = obj["timeScaleGroup"].get<int>();
+				if (obj.contains("isdummy"))
+					note.isDummy = obj["isdummy"].get<bool>();
 				note.ID = Note::getNextID();
 				score.notes[note.ID] = note;
 			}

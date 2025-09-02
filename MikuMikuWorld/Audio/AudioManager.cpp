@@ -66,11 +66,11 @@ namespace Audio
 	{
 		constexpr size_t soundEffectsCount = sizeof(mmw::SE_NAMES) / sizeof(const char*);
 		constexpr std::array<SoundFlags, soundEffectsCount> soundEffectsFlags = {
-			NONE, NONE, NONE, NONE, LOOP | EXTENDABLE, NONE, NONE, NONE, NONE, LOOP | EXTENDABLE
+			NONE, NONE, NONE, NONE, LOOP | EXTENDABLE, NONE, NONE, NONE, NONE, LOOP | EXTENDABLE, NONE
 		};
 
 		constexpr std::array<float, soundEffectsCount> soundEffectsVolumes = {
-			0.75f, 0.75f, 0.90f, 0.80f, 0.70f, 0.75f, 0.80f, 0.92f, 0.82f, 0.70f
+			0.75f, 0.75f, 0.90f, 0.80f, 0.70f, 0.75f, 0.80f, 0.92f, 0.82f, 0.70f, 0.80f
 		};
 
 		debugSounds.resize(soundEffectsCount * soundEffectsProfileCount);

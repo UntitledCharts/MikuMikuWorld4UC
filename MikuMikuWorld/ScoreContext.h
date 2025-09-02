@@ -60,6 +60,7 @@ namespace MikuMikuWorld
 		std::unordered_map<id_t, Note> notes;
 		std::unordered_map<id_t, HoldNote> holds;
 		std::unordered_map<id_t, Note> damages;
+		std::unordered_map<id_t, Note> XNotes;
 		std::unordered_map<id_t, HiSpeedChange> hiSpeedChanges;
 		bool pasting{ false };
 		int offsetTicks{};

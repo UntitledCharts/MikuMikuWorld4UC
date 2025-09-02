@@ -32,7 +32,7 @@ namespace jsonIO
 		}
 
 		note.isDummy = tryGetValue<bool>(data, "isdummy", false);
-
+		
 		return note;
 	}
 
@@ -63,10 +63,11 @@ namespace jsonIO
 	                         const std::unordered_set<mmw::id_t>& selection,
 	                         const std::unordered_set<mmw::id_t>& hiSpeedSelection, int baseTick)
 	{
-		json data, notes, holds, damages, hiSpeedChanges;
+		json data, notes, holds, damages, XNotes, hiSpeedChanges;
 		std::unordered_set<mmw::id_t> selectedNotes;
 		std::unordered_set<mmw::id_t> selectedHolds;
 		std::unordered_set<mmw::id_t> selectedDamages;
+		std::unordered_set<mmw::id_t> selectedXNotes;
 
 		for (mmw::id_t id : selection)
 		{
@@ -91,6 +92,9 @@ namespace jsonIO
 			case mmw::NoteType::Damage:
 				selectedDamages.insert(note.ID);
 				break;
+			case mmw::NoteType::XNote:
+				selectedXNotes.insert(note.ID);
+				break;
 			default:
 				break;
 			}
@@ -111,6 +115,13 @@ namespace jsonIO
 			data["tick"] = note.tick - baseTick;
 
 			damages.push_back(data);
+		}
+		for (mmw::id_t id : selectedXNotes)
+		{
+			const mmw::Note& note = score.notes.at(id);
+			json data = noteToJson(note);
+			data["tick"] = note.tick - baseTick;
+			XNotes.push_back(data);
 		}
 		for (int id : hiSpeedSelection)
 		{
@@ -160,6 +171,7 @@ namespace jsonIO
 		data["notes"] = notes;
 		data["holds"] = holds;
 		data["damages"] = damages;
+		data["XNotes"] = XNotes;
 		data["hiSpeedChanges"] = hiSpeedChanges;
 		return data;
 	}

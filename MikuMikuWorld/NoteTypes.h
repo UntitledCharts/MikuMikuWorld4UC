@@ -10,6 +10,7 @@ namespace MikuMikuWorld
 		HoldMid,
 		HoldEnd,
 		Damage,
+		XNote,
 	};
 
 	enum class FlickType : uint8_t
