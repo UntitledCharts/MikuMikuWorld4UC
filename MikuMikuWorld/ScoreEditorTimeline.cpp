@@ -989,54 +989,6 @@ namespace MikuMikuWorld
 		if (size.y < 10 || size.x < 10)
 			return;
 
-		std::vector<const Note*> visibleNotes;
-		for (const auto& [id, note] : context.score.notes)
-		{
-			if (isNoteVisible(note) &&
-			    (context.showAllLayers || note.layer == context.selectedLayer))
-				visibleNotes.push_back(&note);
-		}
-
-		// ノーツ同士の重なりを検出し、重なり部分を赤色で描画
-		ImDrawList* drawList = ImGui::GetWindowDrawList();
-		for (size_t i = 0; i < visibleNotes.size(); ++i)
-		{
-			const Note* n1 = visibleNotes[i];
-			float n1_x1 = position.x + laneToPosition(n1->lane);
-			float n1_x2 = position.x + laneToPosition(n1->lane + n1->width);
-			float n1_y = position.y - tickToPosition(n1->tick) + visualOffset;
-			float n1_y1 = n1_y - (notesHeight * 0.5f);
-			float n1_y2 = n1_y + (notesHeight * 0.5f);
-
-			for (size_t j = i + 1; j < visibleNotes.size(); ++j)
-			{
-				const Note* n2 = visibleNotes[j];
-				float n2_x1 = position.x + laneToPosition(n2->lane);
-				float n2_x2 = position.x + laneToPosition(n2->lane + n2->width);
-				float n2_y = position.y - tickToPosition(n2->tick) + visualOffset;
-				float n2_y1 = n2_y - (notesHeight * 0.5f);
-				float n2_y2 = n2_y + (notesHeight * 0.5f);
-
-				// 矩形の重なり判定
-				bool overlapX = n1_x1 < n2_x2 && n1_x2 > n2_x1;
-				bool overlapY = n1_y1 < n2_y2 && n1_y2 > n2_y1;
-				if (overlapX && overlapY)
-				{
-					// 重なり範囲を計算
-					float overlap_x1 = std::max(n1_x1, n2_x1);
-					float overlap_x2 = std::min(n1_x2, n2_x2);
-					float overlap_y1 = std::max(n1_y1, n2_y1);
-					float overlap_y2 = std::min(n1_y2, n2_y2);
-
-					// 赤色で半透明の矩形を描画
-					drawList->AddRectFilled(ImVec2(overlap_x1, overlap_y1),
-					                        ImVec2(overlap_x2, overlap_y2),
-					                        IM_COL32(255, 64, 64, 128), // 半透明赤
-					                        2.0f, ImDrawFlags_RoundCornersAll);
-				}
-			}
-		}
-
 		Shader* shader = ResourceManager::shaders[0];
 		shader->use();
 		shader->setMatrix4("projection", camera.getOffCenterOrthographicProjection(
@@ -1142,6 +1094,7 @@ namespace MikuMikuWorld
 		glDisable(GL_DEPTH_TEST);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		drawList->AddImage((void*)framebuffer->getTexture(), position, position + size);
 
 		// draw hold step outlines
