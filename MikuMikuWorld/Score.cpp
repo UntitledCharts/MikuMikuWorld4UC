@@ -266,7 +266,6 @@ namespace MikuMikuWorld
 		uint32_t tapsAddress{};
 		uint32_t holdsAddress{};
 		uint32_t damagesAddress{};
-		uint32_t XNotesAddress{};
 		uint32_t layersAddress{};
 		uint32_t waypointsAddress{};
 		if (version > 2)
@@ -277,8 +276,6 @@ namespace MikuMikuWorld
 			holdsAddress = reader.readUInt32();
 			if (isCyanvas)
 				damagesAddress = reader.readUInt32();
-			if (isCyanvas)
-				XNotesAddress = reader.readUInt32();
 			if (cyanvasVersion >= 4)
 				layersAddress = reader.readUInt32();
 			if (cyanvasVersion >= 5)
@@ -298,7 +295,7 @@ namespace MikuMikuWorld
 			reader.seek(tapsAddress);
 
 		int noteCount = reader.readUInt32();
-		//score.notes.reserve(noteCount);
+		score.notes.reserve(noteCount);
 		for (int i = 0; i < noteCount; ++i)
 		{
 			Note note = readNote(NoteType::Tap, &reader, cyanvasVersion);
@@ -376,26 +373,10 @@ namespace MikuMikuWorld
 			reader.seek(damagesAddress);
 
 			int damageCount = reader.readUInt32();
-			//score.notes.reserve(damageCount);
+			score.notes.reserve(damageCount);
 			for (int i = 0; i < damageCount; ++i)
 			{
 				Note note = readNote(NoteType::Damage, &reader, cyanvasVersion);
-				note.ID = Note::getNextID();
-				score.notes[note.ID] = note;
-			}
-		}
-
-		// -- XNotes
-		if (isCyanvas)
-		{
-			reader.seek(XNotesAddress);
-
-			int XNoteCount = reader.readUInt32();
-			printf("XNote count: %d\n", XNoteCount);
-			//score.notes.reserve(XNoteCount);
-			for (int i = 0; i < XNoteCount; ++i)
-			{
-				Note note = readNote(NoteType::XNote, &reader, cyanvasVersion);
 				note.ID = Note::getNextID();
 				score.notes[note.ID] = note;
 			}
@@ -451,7 +432,7 @@ namespace MikuMikuWorld
 		// offsets address in order: metadata -> events -> taps -> holds
 		// Cyanvas extension: -> damages -> layers -> waypoints
 		uint32_t offsetsAddress = writer.getStreamPosition();
-		writer.writeNull(sizeof(uint32_t) * 8);
+		writer.writeNull(sizeof(uint32_t) * 7);
 
 		uint32_t metadataAddress = writer.getStreamPosition();
 		writeMetadata(score.metadata, &writer);
@@ -529,24 +510,6 @@ namespace MikuMikuWorld
 			++damageNoteCount;
 		}
 
-		uint32_t XNotesAddress = writer.getStreamPosition();
-
-		int XNoteCount = 0;
-		for (const auto& [id, note] : score.notes)
-		{
-			if (note.getType() == NoteType::XNote)
-				++XNoteCount;
-		}
-		writer.writeInt32(XNoteCount);
-
-		for (const auto& [id, note] : score.notes)
-		{
-			if (note.getType() != NoteType::XNote)
-				continue;
-
-			writeNote(note, &writer);
-		}
-
 		// Cyanvas extension: write layers
 		uint32_t layersAddress = writer.getStreamPosition();
 
@@ -572,7 +535,6 @@ namespace MikuMikuWorld
 			writer.writeString(waypoint.name);
 			writer.writeInt32(waypoint.tick);
 		}
-		printf("XNoteCount: %d\n", XNoteCount);
 		// write offset addresses
 		writer.seek(offsetsAddress);
 		writer.writeInt32(metadataAddress);
@@ -580,7 +542,6 @@ namespace MikuMikuWorld
 		writer.writeInt32(tapsAddress);
 		writer.writeInt32(holdsAddress);
 		writer.writeInt32(damagesAddress);
-		writer.writeInt32(XNotesAddress);
 		writer.writeInt32(layersAddress);
 		writer.writeInt32(waypointsAddress);
 

@@ -138,23 +138,6 @@ namespace MikuMikuWorld
 		return index;
 	}
 
-	int getXNoteSpriteIndex(const Note& note)
-	{ 
-		int index;
-
-		switch (note.getType())
-		{
-		case NoteType::XNote:
-			index = 0;
-			break;
-
-		default:
-			break;
-		}
-
-		return index;
-	}
-
 	int getFrictionSpriteIndex(const Note& note)
 	{
 		return note.critical ? 10 : note.flick != FlickType::None ? 11 : 9;
@@ -177,10 +160,6 @@ namespace MikuMikuWorld
 		if (note.getType() == NoteType::Damage)
 		{
 			return "";
-		}
-		if (note.getType() == NoteType::XNote)
-		{
-			se = SE_XNOTE;
 		}
 		else if (note.getType() == NoteType::HoldMid)
 		{

@@ -28,7 +28,6 @@ namespace MikuMikuWorld
 		&config.input.timelineFriction,      &config.input.timelineGuide,
 		&config.input.timelineDamage,        &config.input.timelineBpm,
 		&config.input.timelineTimeSignature, &config.input.timelineHiSpeed,
-		&config.input.timelineXNote
 	};
 
 	constexpr const char* toolbarFlickNames[] = { "none", "default", "left", "right" };

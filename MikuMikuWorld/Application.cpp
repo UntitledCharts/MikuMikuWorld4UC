@@ -319,7 +319,6 @@ namespace MikuMikuWorld
 		                             TextureFilterMode::LinearMipMapLinear,
 		                             TextureFilterMode::Linear);
 		ResourceManager::loadTexture(texturesDir + "notes2.png");
-		ResourceManager::loadTexture(texturesDir + "notes3.png");
 		ResourceManager::loadTexture(texturesDir + "longNoteLine.png");
 		ResourceManager::loadTexture(texturesDir + "touchLine_eff.png");
 		ResourceManager::loadTexture(texturesDir + "guideColors.png");
@@ -335,7 +334,6 @@ namespace MikuMikuWorld
 		ResourceManager::loadTexture(texturesDir + "timeline_flick_right.png");
 		ResourceManager::loadTexture(texturesDir + "timeline_critical.png");
 		ResourceManager::loadTexture(texturesDir + "timeline_trace.png");
-		ResourceManager::loadTexture(texturesDir + "timeline_XNote.png");
 		for (auto color : guideColors)
 			for (auto fade : fadeTypes)
 				ResourceManager::loadTexture(
@@ -350,7 +348,6 @@ namespace MikuMikuWorld
 		noteTextures.holdPath = ResourceManager::getTexture(HOLD_PATH_TEX);
 		noteTextures.touchLine = ResourceManager::getTexture(TOUCH_LINE_TEX);
 		noteTextures.ccNotes = ResourceManager::getTexture(CC_NOTES_TEX);
-		noteTextures.XNote = ResourceManager::getTexture(X_NOTES_TEX);
 		noteTextures.guideColors = ResourceManager::getTexture(GUIDE_COLORS_TEX);
 
 		Localization::loadLanguages(appDir + "res\\i18n");

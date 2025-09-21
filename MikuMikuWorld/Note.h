@@ -23,12 +23,11 @@ namespace MikuMikuWorld
 	constexpr const char* SE_CRITICAL_TICK = "critical_tick";
 	constexpr const char* SE_CRITICAL_FRICTION = "critical_friction";
 	constexpr const char* SE_CRITICAL_CONNECT = "critical_connect";
-	constexpr const char* SE_XNOTE = "xnote";
 
 	constexpr const char* SE_NAMES[] = { SE_PERFECT,         SE_FLICK,         SE_TICK,
 		                                 SE_FRICTION,        SE_CONNECT,       SE_CRITICAL_TAP,
 		                                 SE_CRITICAL_FLICK,  SE_CRITICAL_TICK, SE_CRITICAL_FRICTION,
-		                                 SE_CRITICAL_CONNECT, SE_XNOTE };
+		                                 SE_CRITICAL_CONNECT };
 
 	constexpr float flickArrowWidths[] = { 0.95f, 1.25f, 1.8f, 2.3f, 2.6f, 3.2f };
 
@@ -51,7 +50,6 @@ namespace MikuMikuWorld
 		int touchLine;
 		int ccNotes;
 		int guideColors;
-		int XNote;
 	};
 
 	extern NoteTextures noteTextures;
@@ -72,7 +70,6 @@ namespace MikuMikuWorld
 		bool critical{ false };
 		bool friction{ false };
 		bool isDummy{ false };
-		bool XNote{ false };
 		FlickType flick{ FlickType::None };
 
 		int layer{ 0 };
@@ -166,7 +163,6 @@ namespace MikuMikuWorld
 	int getFlickArrowSpriteIndex(const Note& note);
 	int getNoteSpriteIndex(const Note& note);
 	int getCcNoteSpriteIndex(const Note& note);
-	int getXNoteSpriteIndex(const Note& note);
 	int getFrictionSpriteIndex(const Note& note);
 	std::string_view getNoteSE(const Note& note, const Score& score);
 }

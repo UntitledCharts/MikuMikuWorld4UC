@@ -522,18 +522,6 @@ namespace MikuMikuWorld
 			}
 		}
 
-		if (jsonIO::arrayHasData(data, "XNotes"))
-		{
-			for (const auto& entry : data["XNotes"])
-			{
-				Note note = jsonIO::jsonToNote(entry, NoteType::XNote);
-				note.ID = baseId++;
-				note.layer = selectedLayer;
-
-				pasteData.XNotes[note.ID] = note;
-			}
-		}
-
 		if (jsonIO::arrayHasData(data, "holds"))
 		{
 			for (const auto& entry : data["holds"])
@@ -684,15 +672,10 @@ namespace MikuMikuWorld
 			{
 				note.lane = MAX_LANE - note.lane - note.width + 1;
 			}
-			for (auto& [_, note] : pasteData.XNotes)
-			{
-				note.lane = MAX_LANE - note.lane - note.width + 1;
-			}
 		}
 
-		pasteData.pasting = !(pasteData.notes.empty() && pasteData.damages.empty() && pasteData.holds.empty() &&
-		      pasteData.hiSpeedChanges.empty() && pasteData.XNotes.empty());
-
+		pasteData.pasting = !(pasteData.notes.empty() && pasteData.damages.empty() &&
+		                      pasteData.holds.empty() && pasteData.hiSpeedChanges.empty());
 		if (pasteData.pasting)
 		{
 			// find the lane in which the cursor is in the middle of pasted notes
@@ -770,17 +753,6 @@ namespace MikuMikuWorld
 			hsc.tick += pasteData.offsetTicks;
 			score.hiSpeedChanges[hsc.ID] = hsc;
 		}
-		for (auto& [_, note] : pasteData.XNotes)
-		{
-			note.ID = getNewID(note.ID);
-			if (note.parentID != -1)
-				note.parentID = getNewID(note.parentID);
-
-			note.lane += pasteData.offsetLane;
-			note.tick += pasteData.offsetTicks;
-			note.layer = selectedLayer;
-			score.notes[note.ID] = note;
-		}
 
 		// select newly pasted notes
 		selectedNotes.clear();
@@ -793,9 +765,6 @@ namespace MikuMikuWorld
 		               [this](const auto& it) { return it.second.ID; });
 		std::transform(pasteData.hiSpeedChanges.begin(), pasteData.hiSpeedChanges.end(),
 		               std::inserter(selectedHiSpeedChanges, selectedHiSpeedChanges.end()),
-		               [this](const auto& it) { return it.second.ID; });
-		std::transform(pasteData.XNotes.begin(), pasteData.XNotes.end(),
-					   std::inserter(selectedNotes, selectedNotes.end()),
 		               [this](const auto& it) { return it.second.ID; });
 
 		pasteData.pasting = false;

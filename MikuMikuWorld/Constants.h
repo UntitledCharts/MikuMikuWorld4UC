@@ -24,7 +24,6 @@ namespace MikuMikuWorld
 
 	constexpr const char* NOTES_TEX = "notes1";
 	constexpr const char* CC_NOTES_TEX = "notes2";
-	constexpr const char* X_NOTES_TEX = "notes3";
 	constexpr const char* HOLD_PATH_TEX = "longNoteLine";
 	constexpr const char* TOUCH_LINE_TEX = "touchLine_eff";
 	constexpr const char* GUIDE_COLORS_TEX = "guideColors";
