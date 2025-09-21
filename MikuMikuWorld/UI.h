@@ -8,7 +8,7 @@
 #include "NoteTypes.h"
 #include <vector>
 
-#define APP_NAME "MikuMikuWorld for Untitled Sekai"
+#define APP_NAME "MikuMikuWorld for UntitledCharts"
 
 #define IMGUI_TITLE(icon, title)                                                                   \
 	IO::formatString("%s %s###%s", icon, getString(title), title).c_str()

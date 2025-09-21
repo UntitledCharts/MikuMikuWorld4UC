@@ -1,7 +1,7 @@
 [English](./README.md) / **日本語**
 
-# MikuMikuWorld for Chart Cyanvas
-[MikuMikuWorld](https://github.com/crash5band/MikuMikuWorld)の[Chart Cyanvas](https://github.com/sevenc-nanashi/chart_cyanvas)用フォーク。
+# MikuMikuWorld for UntitledCharts
+[MikuMikuWorld](https://github.com/crash5band/MikuMikuWorld)の[UntitledCharts](https://untitledcharts.com/)用フォーク。
 
 ## 追加された機能：
 MikuMikuWorldの元の機能に加え、以下の機能が追加されています：
@@ -27,7 +27,8 @@ MikuMikuWorldの元の機能に加え、以下の機能が追加されていま�
 1：古いバージョンでも動くかもしれませんが、動作確認はされていません。
 
 ## ダウンロード：
-最新版は[ここ](https://github.com/sevenc-nanashi/MikuMikuWorld/releases/latest/download/MikuMikuWorld.zip)からダウンロードできます。
+最新版は[ここ](https://github.com/UntitledCharts/MikuMikuWorld4UC/releases/latest)からダウンロードできます。
 
 ## スクリーンショット：
-TODO
+
+## TODO

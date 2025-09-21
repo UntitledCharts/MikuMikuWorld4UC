@@ -69,7 +69,7 @@ namespace MikuMikuWorld
 
 	void ScoreEditor::fetchUpdate()
 	{
-
+		return; // TODO Point this to our own repo
 		std::wstring updateFlagPath =
 		    IO::mbToWideStr(Application::getAppDir() + "latest_version.txt");
 		bool shouldFetchUpdate = true;

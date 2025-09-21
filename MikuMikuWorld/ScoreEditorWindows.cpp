@@ -903,7 +903,7 @@ namespace MikuMikuWorld
 
 			if (ImGui::Button(getString("yes"), btnSz))
 			{
-				system("start https://github.com/sevenc-nanashi/MikuMikuWorld4CC/releases/latest");
+				system("start https://github.com/UntitledCharts/MikuMikuWorld4UC/releases");
 				ImGui::CloseCurrentPopup();
 				ImGui::EndPopup();
 				return DialogResult::Ok;
@@ -937,9 +937,11 @@ namespace MikuMikuWorld
 		ImGui::SetNextWindowViewport(ImGui::GetMainViewport()->ID);
 		if (ImGui::BeginPopupModal(MODAL_TITLE("about"), NULL, ImGuiWindowFlags_NoResize))
 		{
-			ImGui::Text("MikuMikuWorld for Chart Cyanvas\nCopyright (c) 2023 Nanashi. "
-			            "(@sevenc-nanashi)\n\nThis application is based on "
-			            "MikuMikuWorld.\nCopyright (C) 2022 Crash5b\n\n");
+			ImGui::Text(APP_NAME "\n"
+				"This application is based on MikuMikuWorld for Chart Cyanvas\n"
+			    "Copyright (c) 2023 Nanashi. (@sevenc-nanashi)\n\n"
+			    "\n\nWhich was based on MikuMikuWorld.\n"
+				"Copyright (C) 2022 Crash5b\n\n");
 			ImGui::Separator();
 
 			float okButtonHeight = ImGui::GetFrameHeight();

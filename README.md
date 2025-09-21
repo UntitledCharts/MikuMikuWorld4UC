@@ -1,6 +1,6 @@
 **English** / [日本語](./README.ja.md)
 
-# MikuMikuWorld for Chart Cyanvas
+# MikuMikuWorld for UntitledCharts
 
 [![](https://byob.yarr.is/sevenc-nanashi/MikuMikuWorld4CC/coverage-en)](./MikuMikuWorld/res/i18n/en.csv)
 [![](https://byob.yarr.is/sevenc-nanashi/MikuMikuWorld4CC/coverage-ja)](./MikuMikuWorld/res/i18n/ja.csv)
@@ -11,13 +11,14 @@
 [![](https://byob.yarr.is/sevenc-nanashi/MikuMikuWorld4CC/coverage-tr)](./MikuMikuWorld/res/i18n/tr.csv)
 [![](https://byob.yarr.is/sevenc-nanashi/MikuMikuWorld4CC/coverage-pt)](./MikuMikuWorld/res/i18n/pt.csv)
 
-Fork of [MikuMikuWorld](https://github.com/crash5band/MikuMikuWorld) for [Chart Cyanvas](https://github.com/sevenc-nanashi/chart_cyanvas).
+Fork of [MikuMikuWorld](https://github.com/crash5band/MikuMikuWorld) for [UntitledCharts](https://untitledcharts.com/).
 
 ## Added Features
 
 In addition to the original features of MikuMikuWorld, the following features are added:
 
 - Damage notes
+- Fake Notes
 - Extended lanes
 - Colored guides
 - New ease types
@@ -41,14 +42,22 @@ If you want to contribute a translation, please see [the guide](./TRANSLATION.md
 ## Requirements
 
 - 64-bit Windows 10 or higher\*.
+- [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe).
 - GPU supporting OpenGL 3.3 with latest drivers installed.
 
 \*Earlier versions of Windows may work but not tested.
 
 ## Download
 
-The latest version can be downloaded [here](https://github.com/sevenc-nanashi/MikuMikuWorld/releases/latest/download/MikuMikuWorld.zip).
+The latest version can be downloaded [here](https://github.com/UntitledCharts/MikuMikuWorld4UC/releases/latest).
 
 ## Screenshot
 
-TODO
+## Todo
+- Add new flick direction (down, down left, down right)
+- Adding alpha property to Guide (enabled by changing Fade Type to Custom)
+- Changing `HoldNote` class so you can insert more than ticks note into holds
+- Add timescale skip
+- Add timescale easing
+- Add import/export to LevelData
+- Translation
