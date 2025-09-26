@@ -95,6 +95,7 @@ hold,Hold
 hold_step,Hold Mid
 flick,Flick
 critical,Critical
+isdummy,Giả
 trace,Trace
 guide,Guide
 damage,Damage
