@@ -190,6 +190,10 @@ namespace MikuMikuWorld
 		void drawFlickArrow(const Note& note, Renderer* renderer, const Color& tint,
 		                    const int offsetTick = 0, const int offsetLane = 0,
 		                    const bool selectedLayer = true);
+		void drawDummyCrossMark(const Note& note, Renderer* renderer, const Color& tint,
+								const int offsetTick = 0, const int offsetLane = 0,
+		                        const bool selectedLayer = true);
+
 		void drawNote(const Note& note, Renderer* renderer, const Color& tint,
 		              const int offsetTick = 0, const int offsetLane = 0,
 		              const bool selectedLayer = true);

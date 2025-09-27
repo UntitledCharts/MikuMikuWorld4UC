@@ -138,6 +138,16 @@ namespace MikuMikuWorld
 		return index;
 	}
 
+	int getDummySpriteIndex(const Note& note)
+	{
+		int index = -1;
+		if (note.isDummy)
+		{
+			index = 0;
+		}
+		return index;
+	}
+
 	int getFrictionSpriteIndex(const Note& note)
 	{
 		return note.critical ? 10 : note.flick != FlickType::None ? 11 : 9;

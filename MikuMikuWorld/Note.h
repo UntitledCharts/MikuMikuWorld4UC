@@ -50,6 +50,7 @@ namespace MikuMikuWorld
 		int touchLine;
 		int ccNotes;
 		int guideColors;
+		int dummyNotes;
 	};
 
 	extern NoteTextures noteTextures;
@@ -163,6 +164,7 @@ namespace MikuMikuWorld
 	int getFlickArrowSpriteIndex(const Note& note);
 	int getNoteSpriteIndex(const Note& note);
 	int getCcNoteSpriteIndex(const Note& note);
+	int getDummySpriteIndex(const Note& note);
 	int getFrictionSpriteIndex(const Note& note);
 	std::string_view getNoteSE(const Note& note, const Score& score);
 }

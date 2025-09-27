@@ -100,6 +100,7 @@ hold,Hold
 hold_step,Hold Mid
 flick,Flick
 critical,Critical
+isdummy,Fake
 trace,Trace
 guide,Guide
 damage,Damage

@@ -2095,6 +2095,9 @@ namespace MikuMikuWorld
 							                         ? tint
 							                         : tint * otherLayerTint,
 							                     z);
+							if (n3.isDummy)
+								drawDummyCrossMark(n3, renderer, tint, offsetTicks, offsetLane);
+
 						}
 					}
 				}
@@ -2268,7 +2271,39 @@ namespace MikuMikuWorld
 		renderer->drawSprite(pos, 0.0f, size, AnchorType::MiddleCenter, tex, sx1, sx2,
 		                     arrowS.getY(), arrowS.getY() + arrowS.getHeight(), tint, 2);
 	}
+	void ScoreEditorTimeline::drawDummyCrossMark(const Note& note, Renderer* renderer,
+	                                         const Color& tint, const int offsetTick,
+	                                         const int offsetLane, const bool selectedLayer)
+	{
+		if (noteTextures.dummyNotes == -1)
+			return;
 
+		const Texture& tex = ResourceManager::textures[noteTextures.dummyNotes];
+		const int sprIndex = getDummySpriteIndex(note);
+		if (!isArrayIndexInBounds(sprIndex, tex.sprites))
+			return;
+
+		const Sprite& crossSprite = tex.sprites[sprIndex];
+
+		Vector2 pos{ 0, 0 };
+		const float x1 = laneToPosition(note.lane + offsetLane);
+		const float x2 = pos.x + laneToPosition(note.lane + note.width + offsetLane);
+		pos.x = midpoint(x1, x2);
+		pos.y += getNoteYPosFromTick(note.tick + offsetTick);
+
+		Vector2 size{ laneWidth, laneWidth };
+
+		const int z = (selectedLayer ? (int)ZIndex::zCount : 0) + (int)ZIndex::Note + 1;
+
+		float sx1 = crossSprite.getX();
+		float sx2 = crossSprite.getX() + crossSprite.getWidth();
+		float sy1 = crossSprite.getY();
+		float sy2 = crossSprite.getY() + crossSprite.getHeight();
+
+
+		renderer->drawSprite(pos, 0.0f, size, AnchorType::MiddleCenter, tex, sx1, sx2,
+		                     sy1, sy2, tint, z);
+	}
 	void ScoreEditorTimeline::drawNote(const Note& note, Renderer* renderer, const Color& tint,
 	                                   const int offsetTick, const int offsetLane,
 	                                   const bool selectedLayer)
@@ -2335,6 +2370,8 @@ namespace MikuMikuWorld
 
 		if (note.isFlick())
 			drawFlickArrow(note, renderer, tint, offsetTick, offsetLane);
+		if (note.isDummy)
+			drawDummyCrossMark(note, renderer, tint, offsetTick, offsetLane);
 	}
 
 	void ScoreEditorTimeline::drawCcNote(const Note& note, Renderer* renderer, const Color& tint,
@@ -2401,6 +2438,8 @@ namespace MikuMikuWorld
 
 		if (note.isFlick())
 			drawFlickArrow(note, renderer, tint, offsetTick, offsetLane);
+		if (note.isDummy)
+			drawDummyCrossMark(note, renderer, tint, offsetTick, offsetLane);
 	}
 
 	bool ScoreEditorTimeline::bpmControl(const Score& score, const Tempo& tempo)
