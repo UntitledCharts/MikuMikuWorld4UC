@@ -2283,7 +2283,7 @@ namespace MikuMikuWorld
 		if (!isArrayIndexInBounds(sprIndex, tex.sprites))
 			return;
 
-		const Sprite& crrosS = tex.sprites[sprIndex];
+		const Sprite& crossS = tex.sprites[sprIndex];
 
 		Vector2 pos{ 0, 0 };
 		const float x1 = laneToPosition(note.lane + offsetLane);
@@ -2291,16 +2291,14 @@ namespace MikuMikuWorld
 		pos.x = midpoint(x1, x2);
 		pos.y += getNoteYPosFromTick(note.tick + offsetTick);
 
-		// Notes wider than 6 lanes also use flick arrow size 6
-		int sizeIndex = std::min((int)floor(note.width) - 1, 5);
 		Vector2 size{ laneWidth, laneWidth };
 
 		const int z = (selectedLayer ? (int)ZIndex::zCount : 0) + (int)ZIndex::Note + 1;
 
-		float sx1 = crrosS.getX();
-		float sx2 = crrosS.getX() + crrosS.getWidth();
-		float sy1 = crrosS.getY();
-		float sy2 = crrosS.getY() + crrosS.getHeight();
+		float sx1 = crossS.getX();
+		float sx2 = crossS.getX() + crossS.getWidth();
+		float sy1 = crossS.getY();
+		float sy2 = crossS.getY() + crossS.getHeight();
 
 
 		renderer->drawSprite(pos, 0.0f, size, AnchorType::MiddleCenter, tex, sx1, sx2,

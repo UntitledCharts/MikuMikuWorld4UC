@@ -140,7 +140,7 @@ namespace MikuMikuWorld
 
 	int getDummySpriteIndex(const Note& note)
 	{
-		int index;
+		int index = -1;
 		if (note.isDummy)
 		{
 			index = 0;

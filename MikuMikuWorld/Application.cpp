@@ -319,7 +319,7 @@ namespace MikuMikuWorld
 		                             TextureFilterMode::LinearMipMapLinear,
 		                             TextureFilterMode::Linear);
 		ResourceManager::loadTexture(texturesDir + "notes2.png");
-		ResourceManager::loadTexture(texturesDir + "notes3.png");
+		ResourceManager::loadTexture(texturesDir + "DUMMY_RED_CROSS.png");
 		ResourceManager::loadTexture(texturesDir + "longNoteLine.png");
 		ResourceManager::loadTexture(texturesDir + "touchLine_eff.png");
 		ResourceManager::loadTexture(texturesDir + "guideColors.png");
