@@ -27,7 +27,7 @@ namespace MikuMikuWorld
 	constexpr const char* HOLD_PATH_TEX = "longNoteLine";
 	constexpr const char* TOUCH_LINE_TEX = "touchLine_eff";
 	constexpr const char* GUIDE_COLORS_TEX = "guideColors";
-	constexpr const char* DUMMY_NOTES_TEX = "DUMMY_RED_CROSS";
+	constexpr const char* DUMMY_RED_CROSS = "notes3";
 	constexpr const char* APP_CONFIG_FILENAME = "app_config.json";
 	constexpr const char* IMGUI_CONFIG_FILENAME = "imgui_config.ini";
 

@@ -2283,7 +2283,7 @@ namespace MikuMikuWorld
 		if (!isArrayIndexInBounds(sprIndex, tex.sprites))
 			return;
 
-		const Sprite& crossS = tex.sprites[sprIndex];
+		const Sprite& crossSprite = tex.sprites[sprIndex];
 
 		Vector2 pos{ 0, 0 };
 		const float x1 = laneToPosition(note.lane + offsetLane);
@@ -2295,10 +2295,10 @@ namespace MikuMikuWorld
 
 		const int z = (selectedLayer ? (int)ZIndex::zCount : 0) + (int)ZIndex::Note + 1;
 
-		float sx1 = crossS.getX();
-		float sx2 = crossS.getX() + crossS.getWidth();
-		float sy1 = crossS.getY();
-		float sy2 = crossS.getY() + crossS.getHeight();
+		float sx1 = crossSprite.getX();
+		float sx2 = crossSprite.getX() + crossSprite.getWidth();
+		float sy1 = crossSprite.getY();
+		float sy2 = crossSprite.getY() + crossSprite.getHeight();
 
 
 		renderer->drawSprite(pos, 0.0f, size, AnchorType::MiddleCenter, tex, sx1, sx2,

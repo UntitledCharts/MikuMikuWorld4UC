@@ -319,7 +319,7 @@ namespace MikuMikuWorld
 		                             TextureFilterMode::LinearMipMapLinear,
 		                             TextureFilterMode::Linear);
 		ResourceManager::loadTexture(texturesDir + "notes2.png");
-		ResourceManager::loadTexture(texturesDir + "DUMMY_RED_CROSS.png");
+		ResourceManager::loadTexture(texturesDir + "notes3.png");
 		ResourceManager::loadTexture(texturesDir + "longNoteLine.png");
 		ResourceManager::loadTexture(texturesDir + "touchLine_eff.png");
 		ResourceManager::loadTexture(texturesDir + "guideColors.png");
@@ -350,7 +350,7 @@ namespace MikuMikuWorld
 		noteTextures.touchLine = ResourceManager::getTexture(TOUCH_LINE_TEX);
 		noteTextures.ccNotes = ResourceManager::getTexture(CC_NOTES_TEX);
 		noteTextures.guideColors = ResourceManager::getTexture(GUIDE_COLORS_TEX);
-		noteTextures.dummyNotes = ResourceManager::getTexture(DUMMY_NOTES_TEX);
+		noteTextures.dummyNotes = ResourceManager::getTexture(DUMMY_RED_CROSS);
 
 
 		Localization::loadLanguages(appDir + "res\\i18n");
