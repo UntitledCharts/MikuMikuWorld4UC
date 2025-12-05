@@ -44,7 +44,7 @@ update_available, 新しいバージョンがリリースされました！
 update_available_description, %s がリリースされました。ブラウザで開きますか？
 score_file, 譜面ファイル
 export_successful, エクスポートが完了しました。
-unknown_file_format, 譜面ファイルの読み込み中にエラーが発生しました
+unknown_file_format,
 open_as_file_format,
 export_as_file_format,
 error, エラー
