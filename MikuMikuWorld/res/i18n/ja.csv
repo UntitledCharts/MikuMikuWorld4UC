@@ -114,9 +114,9 @@ none, 無し
 default, 通常
 left, 左
 right, 右
-#- down,
-#- down_left,
-#- down_right,
+down, 下
+down_left, 左下
+down_right, 右下
 normal, 通常
 hidden, 不可視
 skip, 無視
@@ -143,9 +143,9 @@ repeat_hold_mids, 中継点を繰り返す
 hold_to_traces, トレースに変換
 add_traces_for_hold, トレースを追加
 convert_hold_to_traces, トレースに変換
-#- convert_guide_hold,
-#- convert_guide_to_hold,
-#- convert_hold_to_guide,
+convert_guide_hold, ガイド・スライド変換
+convert_guide_to_hold,スライドに変換
+convert_hold_to_guide, ガイドに変換
 lerp_hispeeds, ハイスピードを補間
 step_type, 中継点の種類
 ease_type, 曲線の種類
@@ -200,9 +200,9 @@ hi_speed, ハイスピード
 edit_hi_speed, ハイスピードを編集
 hi_speed_speed, ハイスピード速度
 #- hi_speed_skip_beat,
-#- hi_speed_ease,
-#- hi_speed_ease_none,
-#- hi_speed_ease_linear,
+hi_speed_ease, イージング
+hi_speed_ease_none, 無し
+hi_speed_ease_linear, 線形補間
 #- hi_speed_hide_notes,
 fade_none, フェードなし
 fade_in, フェードイン
