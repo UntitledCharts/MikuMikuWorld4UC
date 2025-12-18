@@ -199,11 +199,11 @@ decrease_note_size, ノーツの幅を狭める
 hi_speed, ハイスピード
 edit_hi_speed, ハイスピードを編集
 hi_speed_speed, ハイスピード速度
-#- hi_speed_skip_beat,
+hi_speed_skip_beat,スキップ拍数
 hi_speed_ease, イージング
 hi_speed_ease_none, 無し
 hi_speed_ease_linear, 線形補間
-#- hi_speed_hide_notes,
+hi_speed_hide_notes, ノーツを非表示
 fade_none, フェードなし
 fade_in, フェードイン
 fade_out, フェードアウト
