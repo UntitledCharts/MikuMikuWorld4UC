@@ -313,17 +313,17 @@ new_chart,新增譜面
 toggle_playback,播放 / 暫停
 cancel_paste,取消貼上
 stop,停止
-previous_tick,上一個刻度
-next_tick,下一個刻度
+previous_tick,上一個tick
+next_tick,下一個tick
 timeline_select,時間軸 - 選取
-timeline_tap,時間軸 - 插入點擊
+timeline_tap,時間軸 - 插入藍鍵
 timeline_hold,時間軸 - 插入長按
 timeline_hold_step,時間軸 - 插入長按中繼點
-timeline_flick,時間軸 - 插入滑動
-timeline_critical,時間軸 - 插入 Critical
-timeline_trace,時間軸 - 插入軌跡
+timeline_flick,時間軸 - 插入上滑
+timeline_critical,時間軸 - 插入黃鍵
+timeline_trace,時間軸 - 插入軌跡(Trace)
 timeline_guide,時間軸 - 插入引導
-timeline_damage,時間軸 - 插入傷害
+timeline_damage,時間軸 - 插入傷害鍵
 timeline_dummy,時間軸 - 插入假音符
 timeline_bpm,時間軸 - 插入 BPM
 timeline_time_signature,時間軸 - 插入拍號
