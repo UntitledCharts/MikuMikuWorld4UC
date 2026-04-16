@@ -313,8 +313,8 @@ new_chart,新增譜面
 toggle_playback,播放 / 暫停
 cancel_paste,取消貼上
 stop,停止
-previous_tick,上一個tick
-next_tick,下一個tick
+previous_tick,上一個刻度
+next_tick,下一個刻度
 timeline_select,時間軸 - 選取
 timeline_tap,時間軸 - 插入藍鍵
 timeline_hold,時間軸 - 插入長按
