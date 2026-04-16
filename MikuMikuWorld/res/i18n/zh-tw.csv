@@ -1,0 +1,332 @@
+# code: zh-tw
+# key, value
+
+language_name,繁體中文
+translator,TEmPTaTiON(@269Seahorse)
+
+# menu bar
+file,檔案
+new,新增
+open,開啟
+open_recent,開啟最近檔案
+clear,清除
+save,儲存
+save_as,另存新檔
+export_score,匯出譜面
+exit,離開
+edit,編輯
+undo,復原
+redo,重做
+select_all,全選
+view,檢視
+settings,設定
+window,視窗
+vsync,垂直同步
+show_fps,顯示 FPS
+debug,除錯
+create_auto_save,建立自動儲存
+help,說明
+about,關於
+
+# dialogs
+file_not_found,找不到檔案
+file_not_found_msg1,找不到檔案：
+file_not_found_msg2,檔案可能已被移動、重新命名或刪除
+remove_recent_file_not_found,是否要從最近的檔案清單中移除？
+yes,是
+no,否
+unsaved_changes,未儲存的變更
+ask_save,是否儲存變更？
+warn_unsaved,任何未儲存的變更將會遺失。
+save_changes,儲存變更
+discard_changes,放棄變更
+update_available,有可用的更新！
+update_available_description,新版本 %s 已可用。是否要在瀏覽器中開啟？
+score_file,譜面檔案
+export_successful,匯出成功
+unknown_file_format,未知的檔案格式
+open_as_file_format,是否要以...開啟？
+export_as_file_format,是否要以...匯出？
+error,錯誤
+error_load_score_file,讀取譜面檔案時發生錯誤
+error_save_score_file,儲存譜面檔案時發生錯誤
+error_load_music_file,無法開啟音樂檔案
+score_partially_missing,譜面的部分內容可能遺失！
+export_format_not_avail_extended,此格式不適用於擴展譜面
+cancel,取消
+general,一般
+key_config,按鍵設定
+language,語言
+minify,最小化
+auto,自動
+auto_save,自動儲存
+auto_save_enable,啟用自動儲存
+auto_save_interval,自動儲存間隔 (分鐘)
+auto_save_count,自動儲存數量上限
+accent_color,強調色
+accent_color_help,選擇一個強調色來套用。第一個欄位可以從下方的顏色控制項中自訂。
+select_accent_color,選擇一個強調色。
+display_mode,顯示模式
+theme,主題
+base_theme,基礎主題
+theme_light,淺色
+theme_dark,深色
+custom_color,自訂顏色
+timeline,時間軸
+match_timeline_size_to_window,使時間軸寬度符合視窗寬度
+match_notes_size_to_timeline,使音符大小符合時間軸寬度
+lane_width,軌道寬度
+notes_height,音符高度
+scrolling,捲動
+scroll_speed_normal,捲動速度
+scroll_speed_shift,捲動速度 (Shift)
+use_smooth_scroll,使用平滑捲動
+smooth_scroll_time,平滑捲動時間
+return_to_last_tick,暫停時返回上一個刻度
+cursor_auto_scroll,游標自動捲動
+cursor_auto_scroll_amount,游標從時間軸自動捲動的百分比
+background,背景
+background_image,背景圖片
+draw_background,繪製背景圖片
+background_brightness,背景亮度
+lanes_opacity,軌道不透明度
+video,影片
+visuals,視覺效果
+notes_skin,音符外觀
+notes_se,音符音效
+show_tick_in_properties,在音符屬性視窗中顯示刻度
+warn_score_extension_disable,停用擴充功能將會移除相關資料。您要繼續嗎？
+
+# score editor
+options,選項
+chart_properties,譜面屬性
+note_properties,音符屬性
+notes_timeline,音符時間軸
+select,選取
+tap,點擊
+hold,長按
+hold_step,長按中繼點
+flick,滑動
+critical,Critical
+dummy,假音符
+hold_dummy,假長按
+hold_critical,Critical 長按
+trace,軌跡
+guide,引導
+damage,傷害
+bpm,BPM
+time_signature,拍號
+none,無
+default,預設
+left,左
+right,右
+down,下
+down_left,左下
+down_right,右下
+normal,普通
+hidden,隱藏
+skip,跳過
+linear,線性
+ease_in,緩入
+ease_out,緩出
+ease_in_out,緩入緩出
+ease_out_in,緩出緩入
+ease_none,無緩動
+sound_effect,音效
+sfx_default,預設
+sfx_none,無
+sfx_tap,點擊
+sfx_flick,滑動
+sfx_trace,軌跡
+sfx_tick,Tick
+sfx_crit_tap,Critical 點擊
+sfx_crit_flick,Critical 滑動
+sfx_crit_trace,Critical 軌跡
+sfx_crit_tick,Critical Tick
+sfx_damage,傷害
+hold_layer_top,頂部
+hold_layer_bottom,底部
+hold_layer_tooltip,引導音符預設在長按音符之上。變更此屬性可切換順序。
+delete,刪除
+copy,複製
+cut,剪下
+paste,貼上
+flip_paste,翻轉貼上
+duplicate,複製
+flip_duplicate,翻轉複製
+flip,翻轉
+note_width,音符寬度
+note_align,音符對齊
+shrink_down,向下收縮
+shrink_up,向上收縮
+compress_selection,壓縮選取範圍
+connect_holds,連接長按
+split_hold,分割長按
+repeat_hold_mids,重複長按中繼點
+hold_to_traces,將長按轉換為軌跡
+add_traces_for_hold,為長按新增軌跡
+convert_hold_to_traces,轉換長按為軌跡
+convert_guide_hold,轉換長按-引導
+convert_guide_to_hold,將引導轉換為長按
+convert_hold_to_guide,將長按轉換為引導
+convert_hold_to_none,轉換為無
+lerp_hispeeds,插值高速
+step_type,長按中繼點類型
+step_alpha,引導不透明度
+ease_type,緩動類型
+flick_type,滑動類型
+hold_type,長按類型
+fade_type,淡入淡出類型
+hold_start_type,長按開始類型
+hold_end_type,長按結束類型
+metadata,元數據
+title,標題
+designer,譜面設計
+artist,藝術家
+jacket,封面
+lane_extension,軌道擴展
+life_point,生命值
+audio,音訊
+music_file,音樂檔案
+music_offset,音樂偏移
+volume_master,主音量
+volume_bgm,BGM 音量
+volume_se,SE 音量
+playback_speed,播放速度
+statistics,統計
+hispeeds,高速
+taps,點擊
+flicks,滑動
+holds,長按
+steps,長按中繼點
+guides,引導
+traces,軌跡
+total,總計
+combo,Combo
+goto_measure,跳轉到小節
+division,%d 分割
+division_affix,%d 分割
+custom,自訂
+snap_mode,吸附模式
+snap_mode_relative,相對吸附
+snap_mode_absolute,絕對吸附
+snap_mode_individual_absolute,單獨絕對吸附
+zoom,縮放
+show_step_outlines,顯示長按中繼點輪廓
+draw_waveform,顯示波形
+edit_bpm,編輯 BPM
+tick,刻度
+remove,移除
+edit_time_signature,編輯拍號
+measure,小節
+skill,技能
+skill_effect,效果
+skill_effect_score,分數加成
+skill_effect_heal,回復
+skill_effect_perfect,判定強化
+skill_level,等級
+increase_note_size,增大音符尺寸
+decrease_note_size,減小音符尺寸
+hi_speed,高速
+edit_hi_speed,編輯高速
+hi_speed_speed,速度
+hi_speed_skip_beat,跳過
+hi_speed_ease,緩動
+hi_speed_ease_none,無
+hi_speed_ease_linear,線性
+hi_speed_hide_notes,隱藏音符
+fade_none,無淡入淡出
+fade_in,淡入
+fade_out,淡出
+fade_custom,自訂淡入淡出
+fade_classic,經典淡入淡出
+guide_color,引導顏色
+guide_neutral,中性
+guide_red,紅色
+guide_blue,藍色
+guide_green,綠色
+guide_yellow,黃色
+guide_purple,紫色
+guide_cyan,青色
+guide_black,黑色
+layer,圖層
+edit_skill,編輯技能觸發
+edit_fever,編輯 FEVER 觸發
+edit_none,編輯
+edit_event,編輯事件
+beat,節拍
+lane,軌道
+width,寬度
+advanced,進階
+note_properties_note,音符屬性
+note_properties_hi_speed,高速屬性
+note_properties_hold_note,長按音符屬性
+note_properties_guide,引導屬性
+note_properties_not_selected,未選取任何音符或高速
+note_properties_mixed_value,--混合--
+translated_by,翻譯者: %s
+zoom_tooltip,Ctrl + 點擊以編輯數值
+timeline_context_not_selected,未開啟或選取時間軸
+extended_score,擴展譜面
+note_select_tool_tip,Ctrl 鍵以選取或 Alt 鍵以取消選取
+
+# preset manager
+presets,預設
+no_presets,沒有可用的預設
+preset_name,名稱
+description,描述
+create_preset,建立預設
+search,搜尋...
+confirm,確認
+
+# layer manager
+layers,圖層
+layer_name,名稱
+create_layer,建立圖層
+show_all_layers,顯示所有圖層
+layer_rename,重新命名圖層
+layer_up,上移
+layer_down,下移
+layer_merge,合併圖層
+layer_delete,刪除圖層
+layer_hide,隱藏圖層
+layer_show,顯示圖層
+layer_change_order,變更圖層順序
+layer_order_tooltip,拖曳以重新排序
+layer_merge_warning,存在高速重疊，它們將被刪除。無論如何都要合併嗎？
+
+# waypoint manager
+waypoints,路徑點
+create_waypoint,建立路徑點
+edit_waypoint,編輯路徑點
+waypoint_name,名稱
+insert_skill,插入技能
+set_fever_start,設定 Fever 開始
+set_fever_end,設定 Fever 結束
+
+# commands
+action,動作
+keys,按鍵
+add,新增
+cmd_key_listen,正在等待輸入...
+new_chart,新增譜面
+toggle_playback,播放 / 暫停
+cancel_paste,取消貼上
+stop,停止
+previous_tick,上一個刻度
+next_tick,下一個刻度
+timeline_select,時間軸 - 選取
+timeline_tap,時間軸 - 插入點擊
+timeline_hold,時間軸 - 插入長按
+timeline_hold_step,時間軸 - 插入長按中繼點
+timeline_flick,時間軸 - 插入滑動
+timeline_critical,時間軸 - 插入 Critical
+timeline_trace,時間軸 - 插入軌跡
+timeline_guide,時間軸 - 插入引導
+timeline_damage,時間軸 - 插入傷害
+timeline_dummy,時間軸 - 插入假音符
+timeline_bpm,時間軸 - 插入 BPM
+timeline_time_signature,時間軸 - 插入拍號
+timeline_hi_speed,時間軸 - 插入高速變更
+zoom_in,放大
+zoom_out,縮小
