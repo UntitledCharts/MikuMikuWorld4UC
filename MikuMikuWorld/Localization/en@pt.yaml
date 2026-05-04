@@ -1,6 +1,10 @@
----
+# code: pt-br
+# key, value
+
 language_name: " Português do Brasil"
 translator: " nora (__noradrenaline), Myllo (mynameismyllo)"
+
+# menu bar / Barra de menu
 file: " Arquivo"
 new: " Novo"
 open: " Abrir"
@@ -23,12 +27,14 @@ debug: " Debug"
 create_auto_save: " Criar salvamento automático"
 help: " Ajuda"
 about: " Sobre"
+
+# dialogs
 file_not_found: " Arquivo não encontrado"
 file_not_found_msg1: " O arquivo"
 file_not_found_msg2: " não foi encontrado"
 remove_recent_file_not_found: " Quer deletá-lo dos arquivos recentes?"
-'yes': " Sim"
-'no': " Não"
+"yes": " Sim"
+"no": " Não"
 unsaved_changes: " Você tem alterações não salvas"
 ask_save: " Deseja salvar as alterações?"
 warn_unsaved: " As alterações não salvas serão perdidas."
@@ -46,8 +52,7 @@ error_load_score_file: " Um erro ocorreu ao carregar a música."
 error_save_score_file: " Um erro ocorreu ao salvar a música."
 error_load_music_file: " Não foi possível carregar o arquivo de música."
 score_partially_missing: " Pode estar faltando alguma parte da partitura!"
-export_format_not_avail_extended: " Este formato não está disponível para partituras
-  estendidas."
+export_format_not_avail_extended: " Este formato não está disponível para partituras estendidas."
 cancel: " Cancelar"
 general: " Geral"
 key_config: " Configuração das teclas"
@@ -59,8 +64,7 @@ auto_save_enable: " Ativar o salvamento automático"
 auto_save_interval: " Intervalo do salvamento automático (minutos)"
 auto_save_count: " Limite de salvamentos automáticos"
 accent_color: " Cor principal"
-accent_color_help: " Selecione a cor principal para aplicá-la. A primeira cor pode
-  ser customizada com as configurações abaixo."
+accent_color_help: " Selecione a cor principal para aplicá-la. A primeira cor pode ser customizada com as configurações abaixo."
 select_accent_color: " Selecionar cor principal"
 display_mode: " Modo de exibição"
 theme: " Tema"
@@ -74,7 +78,7 @@ match_notes_size_to_timeline: " Ajustar tamanho das notas á Timeline"
 lane_width: " Largura do editor"
 notes_height: " Altura das notas"
 scrolling: " Scrolling"
-scroll_speed_normal: " Velocidade do scroll\t"
+scroll_speed_normal: " Velocidade do scroll	"
 scroll_speed_shift: " Velocidade do scroll (Shift)"
 use_smooth_scroll: "  Scroll suave"
 smooth_scroll_time: " Tempo de suavização"
@@ -92,8 +96,9 @@ visuals: " Visuais"
 notes_skin: " Skin das notas"
 notes_se: " Efeito sonoro das notas"
 show_tick_in_properties: " Mostrar tick nas propriedades"
-warn_score_extension_disable: " Remover funções extendidas irá remover dados associados.
-  Deseja continuar?"
+warn_score_extension_disable: " Remover funções extendidas irá remover dados associados. Deseja continuar?"
+
+# score editor / Editor de charts
 options: " Opções"
 chart_properties: " Propriedades de chart"
 note_properties: " Propriedades das notas"
@@ -143,8 +148,7 @@ sfx_crit_tick: " Tick Critical "
 sfx_damage: " Dano"
 hold_layer_top: " Cima"
 hold_layer_bottom: " Fundo"
-hold_layer_tooltip: " Por padrão, a Nota de Guia fica acima da Nota de Espera. Altere
-  essa propriedade para inverter a ordem."
+hold_layer_tooltip: " Por padrão, a Nota de Guia fica acima da Nota de Espera. Altere essa propriedade para inverter a ordem."
 delete: " Deletar"
 copy: " Copiar"
 cut: " Cortar"
@@ -212,7 +216,7 @@ snap_mode_individual_absolute: " Modo de encaixe individual absoluto"
 zoom: " Zoom"
 zoom_sensitivity: Sensibilidade do Zoom
 show_step_outlines: " Mostrar contorno de steps"
-hide_step_outlines_during_playback: 'Ocultar contornos médios durante a reprodução '
+hide_step_outlines_during_playback: "Ocultar contornos médios durante a reprodução "
 draw_waveform: " Mostrar waveform"
 stop_playback_at_music_end: Parar reprodução no final da música
 edit_bpm: "  Editar BPM"
@@ -270,6 +274,8 @@ zoom_tooltip: " Ferramenta de zoom"
 timeline_context_not_selected: " Nenhuma timeline aberta ou selecionada"
 extended_score: " Pontuação Extendida"
 note_select_tool_tip: " CTRL para Selecionar ou ALT para Desmarcar"
+
+# preset manager / Gerenciador de presets
 presets: " Presets"
 no_presets: " Sem presets"
 preset_name: " Nome"
@@ -277,6 +283,8 @@ description: " Descrição"
 create_preset: " Criar preset"
 search: " Pesquisar"
 confirm: " Confirmar"
+
+# layer manager / Gerenciador de camadas
 layers: " Camadas"
 layer_name: " Nome"
 create_layer: " Criar camada"
@@ -290,8 +298,9 @@ layer_hide: " Esconder camada"
 layer_show: " Mostrar camada"
 layer_change_order: " Mudar ordem da camada"
 layer_order_tooltip: " Arraste para reordenar"
-layer_merge_warning: " Existem sobreposições de Hi-Speeds, elas serão excluídas. Mesmo
-  assim, você deseja mesclar?"
+layer_merge_warning: " Existem sobreposições de Hi-Speeds, elas serão excluídas. Mesmo assim, você deseja mesclar?"
+
+# waypoint manager / Gerenciador de marcadores
 waypoints: " Marcadores"
 create_waypoint: " Criar marcador"
 edit_waypoint: " Editar marcador"
@@ -299,6 +308,8 @@ waypoint_name: " Nome"
 insert_skill: " Inserir Habilidade"
 set_fever_start: " Iniciar Fever"
 set_fever_end: " Terminar Fever"
+
+# commands
 action: " Ação"
 keys: " Teclas"
 add: " Adicionar"

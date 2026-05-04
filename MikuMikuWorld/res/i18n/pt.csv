@@ -85,7 +85,7 @@ smooth_scroll_time, Tempo de suavização
 return_to_last_tick, Voltar à posição original ao pausar
 cursor_auto_scroll, Scroll automático
 cursor_auto_scroll_amount, Porcentagem do scroll automático
-#- division_type,
+division_type,Tipo de Divisão de Display
 background, Fundo
 background_image, Imagem de fundo
 draw_background, Mostrar imagem de fundo
@@ -112,7 +112,7 @@ critical, Crítico
 dummy, Falso
 hold_dummy, Hold Falso
 hold_critical, Hold Critical
-#- hold_separator,
+hold_separator,Separador do Hold
 trace, Trace
 guide, Guia
 damage, Dano
@@ -214,11 +214,11 @@ snap_mode_relative, Modo de encaixe relativo
 snap_mode_absolute, Modo de encaixe absoluto
 snap_mode_individual_absolute, Modo de encaixe individual absoluto
 zoom, Zoom
-#- zoom_sensitivity,
+zoom_sensitivity,Sensibilidade do Zoom
 show_step_outlines, Mostrar contorno de steps
-#- hide_step_outlines_during_playback,
+hide_step_outlines_during_playback,Ocultar contornos médios durante a reprodução 
 draw_waveform, Mostrar waveform
-#- stop_playback_at_music_end,
+stop_playback_at_music_end,Parar reprodução no final da música
 edit_bpm,  Editar BPM
 tick, Tick
 remove, Remover 
