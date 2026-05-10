@@ -2196,7 +2196,8 @@ namespace MikuMikuWorld
 
 				// Trigger layer edit
 				ImGui::SameLine();
-				if (UI::transparentButton(ICON_FA_PENCIL_ALT, toolButtonSize))
+				if (UI::transparentButton(ICON_FA_PENCIL_ALT, toolButtonSize, false,
+				                          context.metadata.isExtendedScore))
 				{
 					editIndex = layerId;
 					editLayerName = layer.name;

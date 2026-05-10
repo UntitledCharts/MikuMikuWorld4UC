@@ -2825,6 +2825,7 @@ namespace MikuMikuWorld
 				insertNote(note, note.holdID, false);
 			// Remove extra layers
 			score.layers.erase(score.layers.begin() + 1, score.layers.end());
+			score.layers[0].forceNoteSpeed = 0;
 			selectedLayer = 0;
 			for (auto&& [_, hispeed] : score.layers[0].hiSpeedChanges)
 			{
