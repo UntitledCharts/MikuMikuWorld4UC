@@ -1,10 +1,6 @@
-# code: zh-tw
-# key, value
-
+---
 language_name: 中文(繁體)
-translator: "TEmPTaTiON(@269Seahorse)"
-
-# menu bar
+translator: TEmPTaTiON(@269Seahorse)
 file: 檔案
 new: 新增
 open: 開啟
@@ -27,22 +23,19 @@ debug: 除錯
 create_auto_save: 建立自動儲存
 help: 說明
 about: 關於
-
-# dialogs
 file_not_found: 找不到檔案
 file_not_found_msg1: 找不到檔案：
 file_not_found_msg2: 檔案可能已被移動、重新命名或刪除
 remove_recent_file_not_found: 是否要從最近的檔案清單中移除？
-"yes": 是
-"no": 否
-property_enable: 
+'yes': 是
+'no': 否
 unsaved_changes: 未儲存的變更
 ask_save: 是否儲存變更？
 warn_unsaved: 任何未儲存的變更將會遺失。
 save_changes: 儲存變更
 discard_changes: 放棄變更
 update_available: 有可用的更新！
-update_available_description: "新版本 %s 已可用。是否要在瀏覽器中開啟？"
+update_available_description: 新版本 %s 已可用。是否要在瀏覽器中開啟？
 score_file: 譜面檔案
 export_successful: 匯出成功
 unknown_file_format: 未知的檔案格式
@@ -98,21 +91,19 @@ notes_skin: 音符外觀
 notes_se: 音符音效
 show_tick_in_properties: 在音符屬性視窗中顯示刻度
 warn_score_extension_disable: 停用擴充功能將會移除相關資料。您要繼續嗎？
-
-# score editor
 options: 選項
 chart_properties: 譜面屬性
 note_properties: 音符屬性
 notes_timeline: 音符時間軸
 select: 選取
-tap: 點擊
+tap: 藍鍵
 hold: 長按
 hold_step: 長按中繼點
-flick: 滑動
-critical: Critical
-dummy: 假音符
+flick: 滑鍵
+critical: 金鍵
+dummy: 假按鍵
 hold_dummy: 假長按
-hold_critical: Critical 長按
+hold_critical: 金色長按
 hold_separator: 長按分離
 trace: 軌跡
 guide: 引導
@@ -138,20 +129,20 @@ ease_none: 無緩動
 sound_effect: 音效
 sfx_default: 預設
 sfx_none: 無
-sfx_tap: 點擊
+sfx_tap: 藍鍵
 sfx_flick: 滑動
 sfx_trace: 軌跡
 sfx_tick: Tick
-sfx_crit_tap: Critical 點擊
-sfx_crit_flick: Critical 滑動
-sfx_crit_trace: Critical 軌跡
+sfx_crit_tap: 金鍵
+sfx_crit_flick: 金色滑鍵
+sfx_crit_trace: 金色軌跡
 sfx_crit_tick: Critical Tick
 sfx_damage: 傷害
 hold_layer_top: 頂部
 hold_layer_bottom: 底部
 hold_layer_tooltip: 引導音符預設在長按音符之上。變更此屬性可切換順序。
 delete: 刪除
-copy: 複製
+copy: 拷貝
 cut: 剪下
 paste: 貼上
 flip_paste: 翻轉貼上
@@ -168,12 +159,12 @@ split_hold: 分割長按
 repeat_hold_mids: 重複長按中繼點
 hold_to_traces: 將長按轉換為軌跡
 add_traces_for_hold: 為長按新增軌跡
-convert_hold_to_traces: 轉換長按為軌跡
+convert_hold_to_traces: 將長按轉換為軌跡
 convert_guide_hold: 轉換長按-引導
 convert_guide_to_hold: 將引導轉換為長按
 convert_hold_to_guide: 將長按轉換為引導
 convert_hold_to_none: 轉換為無
-lerp_hispeeds: 插值高速
+lerp_hispeeds: 插值變速
 step_type: 長按中繼點類型
 step_alpha: 引導不透明度
 ease_type: 緩動類型
@@ -197,9 +188,9 @@ volume_bgm: BGM 音量
 volume_se: SE 音量
 playback_speed: 播放速度
 statistics: 統計
-hispeeds: 高速
+hispeeds: 變速
 taps: 點擊
-flicks: 滑動
+flicks: 滑鍵
 holds: 長按
 steps: 長按中繼點
 guides: 引導
@@ -233,8 +224,8 @@ skill_effect_perfect: 判定強化
 skill_level: 等級
 increase_note_size: 增大音符尺寸
 decrease_note_size: 減小音符尺寸
-hi_speed: 高速
-edit_hi_speed: 編輯高速
+hi_speed: 變速
+edit_hi_speed: 編輯變速
 hi_speed_speed: 速度
 hi_speed_skip_beat: 跳過
 hi_speed_ease: 緩動
@@ -269,14 +260,12 @@ note_properties_hi_speed: 高速屬性
 note_properties_hold_note: 長按音符屬性
 note_properties_guide: 引導屬性
 note_properties_not_selected: 未選取任何音符或高速
-note_properties_mixed_value: --混合--
-translated_by: "翻譯者: %s"
+note_properties_mixed_value: "--混合--"
+translated_by: '翻譯者: %s'
 zoom_tooltip: Ctrl + 點擊以編輯數值
 timeline_context_not_selected: 未開啟或選取時間軸
 extended_score: 擴展譜面
 note_select_tool_tip: Ctrl 鍵以選取或 Alt 鍵以取消選取
-
-# preset manager
 presets: 預設
 no_presets: 沒有可用的預設
 preset_name: 名稱
@@ -284,11 +273,8 @@ description: 描述
 create_preset: 建立預設
 search: 搜尋...
 confirm: 確認
-
-# layer manager
 layers: 圖層
 layer_name: 名稱
-layer_force_note_speed: 
 create_layer: 建立圖層
 show_all_layers: 顯示所有圖層
 layer_rename: 重新命名圖層
@@ -301,8 +287,6 @@ layer_show: 顯示圖層
 layer_change_order: 變更圖層順序
 layer_order_tooltip: 拖曳以重新排序
 layer_merge_warning: 存在高速重疊，它們將被刪除。無論如何都要合併嗎？
-
-# waypoint manager
 waypoints: 路徑點
 create_waypoint: 建立路徑點
 edit_waypoint: 編輯路徑點
@@ -310,8 +294,6 @@ waypoint_name: 名稱
 insert_skill: 插入技能
 set_fever_start: 設定 Fever 開始
 set_fever_end: 設定 Fever 結束
-
-# commands
 action: 動作
 keys: 按鍵
 add: 新增
@@ -326,14 +308,14 @@ timeline_select: 時間軸 - 選取
 timeline_tap: 時間軸 - 插入藍鍵
 timeline_hold: 時間軸 - 插入長按
 timeline_hold_step: 時間軸 - 插入長按中繼點
-timeline_flick: 時間軸 - 插入上滑
+timeline_flick: 時間軸 - 插入滑鍵
 timeline_critical: 時間軸 - 插入黃鍵
-timeline_trace: 時間軸 - 插入軌跡(Trace)
+timeline_trace: 時間軸 - 插入軌跡
 timeline_guide: 時間軸 - 插入引導
 timeline_damage: 時間軸 - 插入傷害鍵
 timeline_dummy: 時間軸 - 插入假音符
 timeline_bpm: 時間軸 - 插入 BPM
 timeline_time_signature: 時間軸 - 插入拍號
-timeline_hi_speed: 時間軸 - 插入高速變更
+timeline_hi_speed: 時間軸 - 插入變速
 zoom_in: 放大
 zoom_out: 縮小
