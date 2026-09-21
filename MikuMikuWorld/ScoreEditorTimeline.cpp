@@ -988,9 +988,11 @@ namespace MikuMikuWorld
 		if (note.isHold())
 		{
 			auto it = notesContext.holdNotes.find(note.holdID);
+			// No guarantee that &note == &stepNote so we have to search it
+			auto& stepNote = notesContext.notes.at(note.ID);
 			step = it == notesContext.holdNotes.end()
 			           ? nullptr
-			           : &it->second.holdStepAt(note, notesContext.notes);
+			           : &it->second.holdStepAt(stepNote, notesContext.notes);
 		}
 		if (!note.isHidden())
 		{
@@ -1599,7 +1601,7 @@ namespace MikuMikuWorld
 				auto&& [sLane, sTime] = fromScreen(cursor);
 				Note dummy = note;
 				dummy.lane = sLane;
-				dummy.width = std::min(dummy.width, 6.f);
+				dummy.width = std::clamp(dummy.width, 0.5f, 6.f);
 				dummy.tick = accumulateTicks(sTime - height / 2, context.score.tempoChanges);
 				dummy.flag = setFlag(dummy.flag, NoteFlag::Attached, false);
 				ImVec2 size = { toScreenWidth(dummy.width), noteHeight };
