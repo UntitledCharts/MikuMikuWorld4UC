@@ -1778,7 +1778,7 @@ namespace MikuMikuWorld
 		HoldNote& hold = score.holdNotes.at(note.holdID);
 		auto&& [oldID, newID] = splitHoldAt(
 		    hold, std::distance(hold.steps.begin(),
-		                                std::find(hold.steps.begin(), hold.steps.end(), note.ID)));
+		                        std::find(hold.steps.begin(), hold.steps.end(), note.ID)));
 		if (!metadata.isExtendedScore)
 		{
 			HoldNote& oldHold = score.holdNotes.at(oldID);
@@ -2244,7 +2244,10 @@ namespace MikuMikuWorld
 		{
 			HoldNote& hold = score.holdNotes.at(holdID);
 			if (!metadata.isExtendedScore && hold.separators.front().isGuide())
+			{
 				newNote.flag = setFlag(newNote.flag, NoteFlag::Hidden);
+				newNote.flag = setFlag(newNote.flag, NoteFlag::Attached, false);
+			}
 			hold.insertStep(newNote, score.notes, !metadata.isExtendedScore, update);
 		}
 		else
