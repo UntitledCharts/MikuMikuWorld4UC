@@ -1776,8 +1776,18 @@ namespace MikuMikuWorld
 			return;
 		const Note& note = *selectedNotes.begin()->second;
 		HoldNote& hold = score.holdNotes.at(note.holdID);
-		splitHoldAt(hold, std::distance(hold.steps.begin(),
+		auto&& [oldID, newID] = splitHoldAt(
+		    hold, std::distance(hold.steps.begin(),
 		                                std::find(hold.steps.begin(), hold.steps.end(), note.ID)));
+		if (!metadata.isExtendedScore)
+		{
+			HoldNote& oldHold = score.holdNotes.at(oldID);
+			Note& oldNote = score.notes.at(oldHold.steps.back());
+			oldNote.flag = setFlag(oldNote.flag, NoteFlag::Attached | NoteFlag::NonAttached, false);
+			HoldNote& newHold = score.holdNotes.at(newID);
+			Note& newNote = score.notes.at(newHold.steps.front());
+			newNote.flag = setFlag(newNote.flag, NoteFlag::Attached | NoteFlag::NonAttached, false);
+		}
 	}
 
 	void ScoreContext::convertHoldToTraces(int quarterDivision, bool deleteHold, bool update)
@@ -2442,7 +2452,8 @@ namespace MikuMikuWorld
 			currHold.separators.pop_back();
 		}
 		auto sepStartIt = nextHold.separators.begin();
-		if (nextHold.separators.size() > 1 && nextHold.separators[1].ID == sepStartIt->ID)
+		if (!metadata.isExtendedScore ||
+		    (nextHold.separators.size() > 1 && nextHold.separators[1].ID == sepStartIt->ID))
 			++sepStartIt;
 		currHold.separators.insert(currHold.separators.end(), sepStartIt,
 		                           nextHold.separators.end());
@@ -2479,7 +2490,6 @@ namespace MikuMikuWorld
 
 		if (!metadata.isExtendedScore)
 		{
-			HoldNoteStep& holdStep = newHold.separators.front();
 			holdStep.flag = setFlag(holdStep.flag, HoldNoteFlag::Dummy, false);
 			newHold.fadeType = FadeType::Classic;
 			if (holdStep.guideColor != GuideColor::Yellow)
