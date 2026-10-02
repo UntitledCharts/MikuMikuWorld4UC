@@ -59,9 +59,9 @@ namespace MikuMikuWorld
 	void from_json(const nlohmann::json& j, ApplicationConfiguration& cfg);
 
 	struct Score;
+	struct ScoreSelection;
 	void selected_score_to_json(nlohmann::json& data, const Score& score,
-	                            const NoteViewCollection& selectedNotes,
-	                            const HiSpeedRefCollection& selectedHispeed, tick_t baseTick,
+	                            const ScoreSelection& selection, tick_t baseTick,
 	                            id_t currentLayer);
 	struct PasteData;
 	bool is_paste_data_empty(const nlohmann::json& data);

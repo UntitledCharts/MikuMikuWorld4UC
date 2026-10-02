@@ -1,43 +1,43 @@
 #pragma once
-#include <stack>
-#include <map>
-#include <unordered_map>
+#include "HistoryEdit.h"
+#include <optional>
 #include <string>
-#include "Score.h"
+#include <tuple>
+#include <vector>
 
 namespace MikuMikuWorld
 {
 	struct History
 	{
 		std::string description;
-		Score score;
-		ScoreMetadata metadata;
+		HistoryEdit edit;
+		// Selection to restore on undo (before) / redo (after).
+		// When absent, the selection is cleared.
+		std::optional<FieldChange<ScoreSelection>> selection;
 	};
 
 	class HistoryManager
 	{
 	  private:
-		size_t stackIndex;
+		// Number of entries currently applied. Entries [0, cursor) can be undone,
+		// entries [cursor, size) can be redone.
+		size_t cursor{ 0 };
 		std::vector<History> historyStack;
 
 		using iterator = std::vector<History>::const_reverse_iterator;
 
 	  public:
-		HistoryManager();
-		const History& peekCurrent() const;
-		const History& undo();
-		const History& redo();
+		void pushHistory(History history);
+		void undo(HistoryContext& ctx);
+		void redo(HistoryContext& ctx);
 
 		int undoCount() const;
 		int redoCount() const;
-		std::tuple<iterator, iterator, iterator> getHistories() const;
-
-		void pushHistory(const History& history);
-		void pushHistory(std::string_view description, const Score& score,
-		                 const ScoreMetadata& metadata);
-		void clear();
-		void clear(const Score& score, const ScoreMetadata& metadata);
 		bool hasUndo() const;
 		bool hasRedo() const;
+		void clear();
+
+		// (newest, first undoable, end): [newest, first undoable) are redoable, newest first.
+		std::tuple<iterator, iterator, iterator> getHistories() const;
 	};
 }

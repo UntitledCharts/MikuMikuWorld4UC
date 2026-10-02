@@ -329,13 +329,13 @@ namespace MikuMikuWorld
 				}
 				if (ImGui::AnyShortcut(input.cancelPaste, defaultFlags))
 					pasteData.cancelPaste();
-				if (currContext->hasAnySelected() &&
+				if (!currContext->selection.empty() &&
 				    ImGui::AnyShortcut(input.duplicate, defaultFlags))
 				{
 					currContext->copySelection();
 					pasteData.startPaste();
 				}
-				if (currContext->hasAnySelected() &&
+				if (!currContext->selection.empty() &&
 				    ImGui::AnyShortcut(input.flipDuplicate, defaultFlags))
 				{
 					currContext->copySelection();
@@ -422,7 +422,8 @@ namespace MikuMikuWorld
 			if (currContext && Audio::isSupportedFileFormat(extension))
 			{
 				currContext->isPendingLoadMusic = true;
-				currContext->pendingLoadMusicFilename = filename;
+				currContext->workingMetadata.musicFile = filename;
+				currContext->pushWorkingMetadata(&ScoreMetadata::musicFile, "Change score music", true);
 			}
 			else
 			{
@@ -543,7 +544,8 @@ namespace MikuMikuWorld
 		if (currContext)
 		{
 			currContext->isPendingLoadMusic = true;
-			currContext->pendingLoadMusicFilename = std::move(filename);
+			currContext->workingMetadata.musicFile = std::move(filename);
+			currContext->pushWorkingMetadata(&ScoreMetadata::musicFile, "Change score music", true);
 		}
 	}
 
@@ -709,22 +711,22 @@ namespace MikuMikuWorld
 
 			ImGui::Separator();
 			if (ImGui::MenuItem(localize(Text::del), ToShortcutString(input.deleteSelection), false,
-			                    currContext && currContext->hasAnySelected()))
+			                    currContext && !currContext->selection.empty()))
 				currContext->deleteSelection();
 
 			if (ImGui::MenuItem(localize(Text::cut), ToShortcutString(input.cutSelection), false,
-			                    currContext && currContext->hasAnySelected()))
+			                    currContext && !currContext->selection.empty()))
 				currContext->cutSelection();
 
 			if (ImGui::MenuItem(localize(Text::copy), ToShortcutString(input.copySelection), false,
-			                    currContext && currContext->hasAnySelected()))
+			                    currContext && !currContext->selection.empty()))
 				currContext->copySelection();
 
 			if (ImGui::MenuItem(localize(Text::paste), ToShortcutString(input.paste)))
 				pasteData.startPaste();
 
 			if (ImGui::MenuItem(localize(Text::duplicate), ToShortcutString(input.duplicate), false,
-			                    currContext && currContext->hasAnySelected()))
+			                    currContext && !currContext->selection.empty()))
 			{
 				currContext->copySelection();
 				pasteData.startPaste();
@@ -732,7 +734,7 @@ namespace MikuMikuWorld
 
 			if (ImGui::MenuItem(localize(Text::flipDuplicate),
 			                    ToShortcutString(input.flipDuplicate), false,
-			                    currContext && currContext->hasAnySelected()))
+			                    currContext && !currContext->selection.empty()))
 			{
 				currContext->copySelection();
 				pasteData.startPaste();
@@ -740,7 +742,7 @@ namespace MikuMikuWorld
 			}
 
 			if (ImGui::MenuItem(localize(Text::flip), ToShortcutString(input.flip), false,
-			                    currContext && currContext->hasAnySelected()))
+			                    currContext && !currContext->selection.empty()))
 				currContext->flipSelection();
 
 			ImGui::Separator();

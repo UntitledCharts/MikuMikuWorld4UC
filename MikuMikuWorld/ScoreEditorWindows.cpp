@@ -169,18 +169,18 @@ namespace MikuMikuWorld
 		ImGui::SameLine();
 
 		if (iconButton(ICON_FA_CUT, "__bind_cut", cutSelection, input.cutSelection,
-		               context && context->hasAnySelected()))
+		               context && !context->selection.empty()))
 			context->cutSelection();
 
 		if (iconButton(ICON_FA_COPY, "__bind_copy", copySelection, input.copySelection,
-		               context && context->hasAnySelected()))
+		               context && !context->selection.empty()))
 			context->copySelection();
 
 		if (iconButton(ICON_FA_PASTE, "__bind_paste", paste, input.paste))
 			pasteData.startPaste();
 
 		if (iconButton(ICON_FA_CLONE, "__bind_duplicate", duplicate, input.duplicate,
-		               context && context->hasAnySelected()))
+		               context && !context->selection.empty()))
 		{
 			context->copySelection();
 			pasteData.startPaste();
@@ -423,20 +423,20 @@ namespace MikuMikuWorld
 		        ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			UI::beginPropertyTable();
-			UI::stringPropertyRow(Text::title, context.metadata.title);
+			UI::stringPropertyRow(Text::title, context.workingMetadata.title);
 			if (ImGui::IsItemDeactivatedAfterEdit())
-				context.pushHistory("Change score title");
-			UI::stringPropertyRow(Text::designer, context.metadata.author);
+				context.pushWorkingMetadata(&ScoreMetadata::title, "Change score title");
+			UI::stringPropertyRow(Text::designer, context.workingMetadata.author);
 			if (ImGui::IsItemDeactivatedAfterEdit())
-				context.pushHistory("Change score designer");
-			UI::stringPropertyRow(Text::artist, context.metadata.artist);
+				context.pushWorkingMetadata(&ScoreMetadata::author, "Change score designer");
+			UI::stringPropertyRow(Text::artist, context.workingMetadata.artist);
 			if (ImGui::IsItemDeactivatedAfterEdit())
-				context.pushHistory("Change score artist");
+				context.pushWorkingMetadata(&ScoreMetadata::artist, "Change score artist");
 
-			int result = UI::filePropertyRow(Text::jacket, context.metadata.jacketFile);
+			int result = UI::filePropertyRow(Text::jacket, context.workingMetadata.jacketFile);
 			if (result > 0)
 			{
-				context.pushHistory("Change score jacket");
+				context.pushWorkingMetadata(&ScoreMetadata::jacketFile, "Change score jacket");
 			}
 			else if (result < 0)
 			{
@@ -447,8 +447,8 @@ namespace MikuMikuWorld
 
 				if (fileDialog.openFile() == IO::FileDialogResult::OK)
 				{
-					context.metadata.jacketFile = fileDialog.outputFilename;
-					context.pushHistory("Change score jacket");
+					context.workingMetadata.jacketFile = fileDialog.outputFilename;
+					context.pushWorkingMetadata(&ScoreMetadata::jacketFile, "Change score jacket");
 				}
 			}
 			if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
@@ -471,13 +471,15 @@ namespace MikuMikuWorld
 			}
 			if (context.metadata.isExtendedScore)
 			{
-				int laneExt = context.metadata.laneExtension;
-				if (UI::intPropertyRow(Text::laneExtension, laneExt, "%d", 0, 10000))
-					context.setLaneExtension(laneExt, false);
+				UI::intPropertyRow(Text::laneExtension, context.workingMetadata.laneExtension, "%d",
+				                   0, 10000);
 				if (ImGui::IsItemDeactivatedAfterEdit())
-					context.pushHistory("Change lane extension");
-				UI::intPropertyRow(Text::lifePoint, context.metadata.baseLifePoint, "%d", 10,
+					context.setLaneExtension(context.workingMetadata.laneExtension);
+				UI::intPropertyRow(Text::lifePoint, context.workingMetadata.baseLifePoint, "%d", 10,
 				                   1000000);
+				if (ImGui::IsItemDeactivatedAfterEdit())
+					context.pushWorkingMetadata(&ScoreMetadata::baseLifePoint,
+					                            "Change score inital life");
 			}
 			UI::endPropertyTable();
 		}
@@ -491,12 +493,12 @@ namespace MikuMikuWorld
 			bool isMusicLoading = context.isMusicLoading->load();
 			ImGui::BeginDisabled(isMusicLoading);
 			int filePickResult = UI::filePropertyRow(
-			    Text::musicFile, isMusicLoading ? loadingText : context.metadata.musicFile);
+			    Text::musicFile, isMusicLoading ? loadingText : context.workingMetadata.musicFile);
 			ImGui::EndDisabled();
 			if (filePickResult > 0)
 			{
 				context.isPendingLoadMusic = true;
-				context.pendingLoadMusicFilename = context.metadata.musicFile;
+				context.pushWorkingMetadata(&ScoreMetadata::musicFile, "Change score music", true);
 			}
 			else if (filePickResult < 0)
 			{
@@ -507,16 +509,21 @@ namespace MikuMikuWorld
 
 				if (fileDialog.openFile() == IO::FileDialogResult::OK)
 				{
-					context.pendingLoadMusicFilename = fileDialog.outputFilename;
+					context.workingMetadata.musicFile = fileDialog.outputFilename;
 					context.isPendingLoadMusic = true;
+					context.pushWorkingMetadata(&ScoreMetadata::musicFile, "Change score music",
+					                            true);
 				}
 			}
 
-			if (UI::dragFloatPropertyRow(Text::musicOffset, context.metadata.musicOffset, "%.3fms"))
-			{
-				context.audio->setMusicOffset(timeline.getCurrentTime(),
-				                              context.metadata.musicOffset);
-			}
+			ImGui::BeginDisabled(isMusicLoading);
+			if (UI::dragFloatPropertyRow(Text::musicOffset, context.workingMetadata.musicOffset,
+			                             "%.3fms"))
+				context.isPendingChangeMusicOffset = true; // live preview while dragging
+			if (ImGui::IsItemDeactivatedAfterEdit())
+				context.pushWorkingMetadata(&ScoreMetadata::musicOffset,
+				                            "Change score music offset");
+			ImGui::EndDisabled();
 
 			// volume controls
 			float master = manager.getMasterVolume();
@@ -655,7 +662,7 @@ namespace MikuMikuWorld
 	{
 		mixedLayer = false;
 		layer = context.selectedLayer;
-		if (context.hasAnyNoteSelected())
+		if (!context.selection.emptyNotes())
 		{
 			using value_type = NoteViewCollection::value_type;
 			auto alwaysTrue = [](const value_type& v) { return true; };
@@ -790,7 +797,7 @@ namespace MikuMikuWorld
 			holdFlag = setFlag(holdFlag, HoldNoteFlag::Critical, isCritHold);
 			holdFlag = setFlag(holdFlag, HoldNoteFlag::Dummy, isDummyHold);
 		}
-		if (context.hasAnyHispeedSelected())
+		if (!context.selection.emptyHispeeds())
 		{
 			using value_type = HiSpeedRefCollection::value_type;
 			auto alwaysTrue = [](const value_type& v) { return true; };
@@ -805,18 +812,18 @@ namespace MikuMikuWorld
 			{ return context.score.layers[v.first].hiSpeedChanges.at(v.second).hideNotes; };
 			id_t prevLayer = layer;
 			mixedLayer = !mixedLayer &&
-			             checkMixState(layer, context.selectedHiSpeedChanges, getLayer, alwaysTrue);
-			if (prevLayer != layer && context.hasAnyNoteSelected())
+			             checkMixState(layer, context.selection.hispeeds, getLayer, alwaysTrue);
+			if (prevLayer != layer && !context.selection.emptyNotes())
 				mixedLayer = true;
-			mixedSpeed = checkMixState(speed, context.selectedHiSpeedChanges, getSpeed, alwaysTrue);
+			mixedSpeed = checkMixState(speed, context.selection.hispeeds, getSpeed, alwaysTrue);
 			mixedSkips = context.metadata.isExtendedScore &&
-			             checkMixState(skips, context.selectedHiSpeedChanges, getSkips, alwaysTrue);
+			             checkMixState(skips, context.selection.hispeeds, getSkips, alwaysTrue);
 			mixedhspdEase =
 			    context.metadata.isExtendedScore &&
-			    checkMixState(hspdEase, context.selectedHiSpeedChanges, getEase, alwaysTrue);
+			    checkMixState(hspdEase, context.selection.hispeeds, getEase, alwaysTrue);
 			mixedHideNotes =
 			    context.metadata.isExtendedScore &&
-			    checkMixState(hideNotes, context.selectedHiSpeedChanges, getHideNotes, alwaysTrue);
+			    checkMixState(hideNotes, context.selection.hispeeds, getHideNotes, alwaysTrue);
 		}
 	}
 
@@ -828,7 +835,7 @@ namespace MikuMikuWorld
 
 	void ScoreNotePropertiesWindow::update(ScoreContext& context)
 	{
-		if (!context.hasAnySelected())
+		if (context.selection.empty())
 		{
 			ImGui::TextUnformatted(localize(Text::notePropertiesNotSelected));
 			return;
@@ -839,7 +846,7 @@ namespace MikuMikuWorld
 			context.selectedFlag =
 			    setFlag(context.selectedFlag, SelectionFlag::DirtyProperty, false);
 		}
-		if (context.hasAnyNoteSelected())
+		if (!context.selection.emptyNotes())
 		{
 			const char* notePropsTitle = localizeOrInsert("__option_note_props", UI::iconTitle,
 			                                              ICON_FA_COG, Text::notePropertiesNote);
@@ -1108,7 +1115,7 @@ namespace MikuMikuWorld
 				UI::endPropertyTable();
 			}
 		}
-		if (context.hasAnyHispeedSelected() &&
+		if (!context.selection.emptyHispeeds() &&
 		    ImGui::CollapsingHeader(localizeOrInsert("__option_hispeed_props", UI::iconTitle,
 		                                             ICON_FA_FAST_FORWARD,
 		                                             Text::notePropertiesHiSpeed),
@@ -1136,7 +1143,7 @@ namespace MikuMikuWorld
 			                                      -MAX_HISPEED, MAX_HISPEED, 0.1);
 			if (state > 0)
 			{
-				for (auto& [l, t] : context.selectedHiSpeedChanges)
+				for (auto& [l, t] : context.selection.hispeeds)
 				{
 					HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 					h.speed = speed;
@@ -1150,7 +1157,7 @@ namespace MikuMikuWorld
 			else if (state < 0)
 			{
 				float offset = speed - oldSpeed;
-				for (auto& [l, t] : context.selectedHiSpeedChanges)
+				for (auto& [l, t] : context.selection.hispeeds)
 				{
 					HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 					h.speed = std::clamp(h.speed + offset, -MAX_HISPEED, MAX_HISPEED);
@@ -1167,7 +1174,7 @@ namespace MikuMikuWorld
 				                               Text::notePropertiesMixedValue,
 				                               hispeedEaseTypeTexts))
 				{
-					for (auto& [l, t] : context.selectedHiSpeedChanges)
+					for (auto& [l, t] : context.selection.hispeeds)
 					{
 						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 						h.ease = hspdEase;
@@ -1183,7 +1190,7 @@ namespace MikuMikuWorld
 				                                  beatFmtStr, -MAX_HISPEED, MAX_HISPEED);
 				if (state > 0)
 				{
-					for (auto& [l, t] : context.selectedHiSpeedChanges)
+					for (auto& [l, t] : context.selection.hispeeds)
 					{
 						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 						h.skips = skips;
@@ -1197,7 +1204,7 @@ namespace MikuMikuWorld
 				else if (state < 0)
 				{
 					float offset = skips - oldSkips;
-					for (auto& [l, t] : context.selectedHiSpeedChanges)
+					for (auto& [l, t] : context.selection.hispeeds)
 					{
 						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 						h.skips = std::clamp(h.skips + offset, -MAX_HISPEED, MAX_HISPEED);
@@ -1211,7 +1218,7 @@ namespace MikuMikuWorld
 				ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, mixedHideNotes);
 				if (UI::checkboxPropertyRow(Text::hiSpeedHideNotes, hideNotes))
 				{
-					for (auto& [l, t] : context.selectedHiSpeedChanges)
+					for (auto& [l, t] : context.selection.hispeeds)
 					{
 						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 						h.hideNotes = hideNotes;
@@ -1401,11 +1408,11 @@ namespace MikuMikuWorld
 		ImGui::EndChild();
 		ImGui::Spacing();
 
-		ImGui::BeginDisabled(!context.hasAnySelected());
+		ImGui::BeginDisabled(context.selection.empty());
 		if (ImGui::Button(localize(Text::createPreset),
 		                  ImVec2(-1, ImGui::GetFrameHeightWithSpacing())))
 			dialogOpen = true;
-		if (!context.hasAnySelected() && ImGui::GetWindowDrawList())
+		if (context.selection.empty() && ImGui::GetWindowDrawList())
 		{
 			ImGuiStyle& style = ImGui::GetStyle();
 			ImDrawList* drawList = ImGui::GetWindowDrawList();

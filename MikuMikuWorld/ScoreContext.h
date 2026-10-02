@@ -9,6 +9,7 @@
 #include "ScoreStats.h"
 #include <unordered_set>
 #include <atomic>
+#include <optional>
 
 namespace MikuMikuWorld
 {
@@ -130,6 +131,7 @@ namespace MikuMikuWorld
 
 		Score score;
 		ScoreMetadata metadata;
+		ScoreMetadata workingMetadata;
 		std::string filename;
 		ScoreStats scoreStats;
 		HistoryManager history;
@@ -140,8 +142,9 @@ namespace MikuMikuWorld
 		bool showAllLayers = false;
 		SelectionFlag selectedFlag = SelectionFlag::None;
 
+		// pending music changes will be handled in the timeline
 		bool isPendingLoadMusic{ false };
-		std::string pendingLoadMusicFilename{};
+		bool isPendingChangeMusicOffset{ false };
 		std::unique_ptr<std::atomic_bool> isMusicLoading =
 		    std::make_unique<std::atomic_bool>(false);
 
@@ -150,8 +153,8 @@ namespace MikuMikuWorld
 		id_t nextHoldID = 0;
 
 		id_t selectedLayer = 0;
-		NoteViewCollection selectedNotes;
-		HiSpeedRefCollection selectedHiSpeedChanges;
+		ScoreSelection selection;
+		NoteViewCollection selectedNotes; // fast lookup for selection.notes
 		std::vector<Note*> hoveringNotes;
 		NoteOrderedCollection notesOrderedView; // fast lookup
 		WaypointOrderedCollection waypointOrderedView;
@@ -182,18 +185,16 @@ namespace MikuMikuWorld
 		void setHoldSeparator(int separator = true);
 
 		void updateSelectionFlag();
+		void updateSelectionView();
+		// Clear selection and its view without updating the selection flag
+		void clearNoteSelection();
+		void clearSelection();
 
-		bool hasAnySelected() const;
-		bool hasAnyNoteSelected() const;
-		bool hasAnyHispeedSelected() const;
-		bool hasNoteSelected(id_t noteID) const;
-		bool hasNoteSelected(const Note& note) const;
-		bool hasHispeedSelected(const HiSpeed& hispeed) const;
 		tick_t getMinTickFromSelection() const;
 
 		void selectNote(Note& note, bool update = true);
 		void selectHiSpeed(const HiSpeed& hispeed);
-		void deselectNote(const Note& note);
+		void deselectNote(const Note& note, bool update = true);
 		void deselectHiSpeed(const HiSpeed& hispeed);
 		void selectAll(id_t layer = LAYER_ALL);
 		void deselectAll();
@@ -227,9 +228,18 @@ namespace MikuMikuWorld
 		void convertHoldToNone();
 
 		void updateViews();
+		HistoryContext historyContext();
 		void undo();
 		void redo();
+		// Legacy: does not record history. TODO(history-migration): replace with typed overload
 		void pushHistory(std::string_view description);
+		void pushHistory(std::string_view description, HistoryEdit edit,
+		                 std::optional<FieldChange<ScoreSelection>> selectionChange = std::nullopt);
+
+		// Commit the current working metadata field and push it onto the history
+		template <typename T>
+		inline void pushWorkingMetadata(T ScoreMetadata::* field, std::string_view description,
+		                                bool deferred = false);
 
 		Note* insertNote(const Note& note, id_t holdID = -1, bool update = true);
 		// Will affect any view that referencing the note, like selection
@@ -254,5 +264,23 @@ namespace MikuMikuWorld
 		bool isLayerVisible(id_t layer) const;
 		bool isLayerInteractive(id_t layer) const;
 		bool isLayerSelected(id_t layer) const;
+
+	  private:
+		void assertNoteSelection();
+		void onHistoryApplied();
 	};
+
+	template <typename T>
+	inline void ScoreContext::pushWorkingMetadata(T ScoreMetadata::* field,
+	                                              std::string_view description, bool deferred)
+	{
+		T& before = metadata.*field;
+		T& after = workingMetadata.*field;
+		if (before == after)
+			return;
+		ChangeMetadata edit{ MetadataChange<T>{ field, { before, after } } };
+		if (!deferred)
+			before = after;
+		pushHistory(description, std::move(edit));
+	}
 }

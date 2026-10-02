@@ -63,4 +63,22 @@ namespace MikuMikuWorld
 		LayerCollection layers{ Layer{ "default", 0 } };
 		WaypointCollection waypoints;
 	};
+
+	struct ScoreSelection
+	{
+		NoteRefCollection notes;
+		HiSpeedRefCollection hispeeds;
+
+		bool empty() const;
+		bool emptyNotes() const;
+		bool emptyHispeeds() const;
+		bool hasNoteID(id_t noteID) const;
+		bool has(const Note& note) const;
+		bool has(const HiSpeed& hispeed) const;
+
+		void clearAll();
+		void clearNotes();
+		void clearHispeed();
+		bool operator==(const ScoreSelection& other) const;
+	};
 }

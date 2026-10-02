@@ -91,6 +91,7 @@ namespace MikuMikuWorld
 
 	using NoteCollection = std::unordered_map<id_t, Note>;
 	using NoteOrderedCollection = std::multimap<tick_t, Note*>;
+	using NoteRefCollection = std::unordered_set<id_t>;
 	using NoteViewCollection = std::unordered_map<id_t, Note*>;
 	struct NotesContext; // Forward declaration
 
