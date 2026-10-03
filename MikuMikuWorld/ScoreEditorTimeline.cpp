@@ -688,6 +688,8 @@ namespace MikuMikuWorld
 			int beat = beat_t(tickDiff / ticksPerBeats) + measureBeat;
 
 			bool resetSpacing = false;
+			bool isMeasureLine = tickDiff % ticksPerMeasure == 0 && measure % measureStep == 0;
+			bool isBeatLine = beat % beatStep == 0;
 			if (tick >= ticksPerMeasure)
 			{
 				measure_t offsetMeasure = tickDiff / ticksPerMeasure;
@@ -705,8 +707,6 @@ namespace MikuMikuWorld
 				}
 			}
 
-			bool isMeasureLine = tickDiff % ticksPerMeasure == 0 && measure % measureStep == 0;
-			bool isBeatLine = beat % beatStep == 0;
 			if (isMeasureLine || isBeatLine)
 			{
 				secs_t time = accumulateDuration(tick, context.score.tempoChanges);
@@ -757,6 +757,7 @@ namespace MikuMikuWorld
 			{
 				quarterPerMinute = nextTempo->second.quarterPerMinute;
 				resetSpacing = true;
+				++nextTempo;
 			}
 
 			if (resetSpacing)
@@ -767,7 +768,6 @@ namespace MikuMikuWorld
 				spacing = quartersToSecs(ticksToQuarters(ticksPerMeasure), quarterPerMinute);
 				if (spacingMin > spacing)
 					measureStep = roundUpToPowerOfTwo(std::round(spacingMin / spacing));
-				++nextTempo;
 			}
 		}
 		ImGui::PopFont();
