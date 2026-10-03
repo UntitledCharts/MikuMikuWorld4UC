@@ -19,8 +19,8 @@ namespace MikuMikuWorld
 
 		const History& entry = historyStack[--cursor];
 		undoEdit(entry.edit, ctx);
-		if (entry.selection)
-			ctx.selection = entry.selection->before;
+		if (entry.selection && entry.selection->before)
+			ctx.selection = *entry.selection->before;
 		else
 			ctx.selection.clearAll();
 	}
@@ -32,8 +32,8 @@ namespace MikuMikuWorld
 
 		const History& entry = historyStack[cursor++];
 		redoEdit(entry.edit, ctx);
-		if (entry.selection)
-			ctx.selection = entry.selection->after;
+		if (entry.selection && entry.selection->after)
+			ctx.selection = *entry.selection->after;
 		else
 			ctx.selection.clearAll();
 	}
@@ -52,7 +52,7 @@ namespace MikuMikuWorld
 		cursor = 0;
 	}
 
-	std::tuple<HistoryManager::iterator, HistoryManager::iterator, HistoryManager::iterator>
+	std::tuple<HistoryManager::const_iterator, HistoryManager::const_iterator, HistoryManager::const_iterator>
 	HistoryManager::getHistories() const
 	{
 		return std::make_tuple(historyStack.crbegin(), historyStack.crend() - cursor,

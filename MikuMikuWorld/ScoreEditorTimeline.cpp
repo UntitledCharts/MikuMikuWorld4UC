@@ -1340,9 +1340,8 @@ namespace MikuMikuWorld
 		if (ImGui::IsItemDeactivated())
 		{
 			grabbingNote = -1;
-			// TODO(history-migration): Stage 3. Capture the selected notes when the drag starts
-			// and push a ChangeNotes edit here. The old code diffed against
-			// history.peekCurrent().score, which no longer exists.
+			if (context.pushNotesEdit("Note update"))
+				context.updateSelectionFlag();
 		}
 	}
 
@@ -2888,8 +2887,7 @@ namespace MikuMikuWorld
 				if (hispdIt == hispdMouse)
 					continue;
 				const HiSpeed& hispeed = hispdIt->second;
-				if (hiSpeedControl(drawList, hispeed, context.selection.has(hispeed),
-				                   eventEnabled))
+				if (hiSpeedControl(drawList, hispeed, context.selection.has(hispeed), eventEnabled))
 					openEvent(hispeed);
 			}
 
@@ -3277,9 +3275,12 @@ namespace MikuMikuWorld
 						ImGui::EndPopup();
 						return;
 					}
+					const Tempo before = tempoIt->second;
 					tempo->quarterPerMinute = tempoIt->second.quarterPerMinute =
 					    std::clamp(tempo->quarterPerMinute, MIN_BPM, MAX_BPM);
-					context.pushHistory("Change tempo");
+					if (before.quarterPerMinute != tempoIt->second.quarterPerMinute)
+						context.pushEdit("Change tempo",
+						                 ChangeTempo{ tempo->tick, before, tempoIt->second });
 				}
 				UI::endPropertyTable();
 				ImGui::Separator();
@@ -3287,8 +3288,14 @@ namespace MikuMikuWorld
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
-					if (context.score.tempoChanges.erase(tempo->tick))
-						context.pushHistory("Remove tempo change");
+					auto tempoIt = context.score.tempoChanges.find(tempo->tick);
+					if (tempoIt != context.score.tempoChanges.end())
+					{
+						const Tempo before = tempoIt->second;
+						context.score.tempoChanges.erase(tempoIt);
+						context.pushEdit("Remove tempo change",
+						                 ChangeTempo{ tempo->tick, before, std::nullopt });
+					}
 				}
 				ImGui::EndDisabled();
 			}
@@ -3307,12 +3314,15 @@ namespace MikuMikuWorld
 						return;
 					}
 					TimeSignature& ts = tsIt->second;
+					const TimeSignature before = ts;
 					ts.numerator = std::clamp(timeSig->numerator, MIN_TIME_SIGNATURE,
 					                          MAX_TIME_SIGNATURE_NUMERATOR);
 					ts.denominator = std::clamp(timeSig->denominator, MIN_TIME_SIGNATURE,
 					                            MAX_TIME_SIGNATURE_DENOMINATOR);
 
-					context.pushHistory("Change time signature");
+					if (before.numerator != ts.numerator || before.denominator != ts.denominator)
+						context.pushEdit("Change time signature",
+						                 ChangeTimeSignature{ timeSig->measure, before, ts });
 				}
 				UI::endPropertyTable();
 
@@ -3322,8 +3332,15 @@ namespace MikuMikuWorld
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
-					if (context.score.timeSignatures.erase(timeSig->measure))
-						context.pushHistory("Remove time signature");
+					auto tsIt = context.score.timeSignatures.find(timeSig->measure);
+					if (tsIt != context.score.timeSignatures.end())
+					{
+						const TimeSignature before = tsIt->second;
+						context.score.timeSignatures.erase(tsIt);
+						context.pushEdit(
+						    "Remove time signature",
+						    ChangeTimeSignature{ timeSig->measure, before, std::nullopt });
+					}
 				}
 				ImGui::EndDisabled();
 			}
@@ -3364,11 +3381,14 @@ namespace MikuMikuWorld
 						return;
 					}
 					auto& hspd = hispeedIt->second;
+					const HiSpeed before = hspd;
 					hspd.speed = std::clamp(hispeed->speed, -MAX_HISPEED, MAX_HISPEED);
 					hspd.skips = std::clamp(hispeed->skips, -MAX_HISPEED, MAX_HISPEED);
 					hspd.ease = hispeed->ease;
 					hspd.hideNotes = hispeed->hideNotes;
-					context.pushHistory("Change hi-speed");
+					if (!isSame(before, hspd))
+						context.pushEdit("Change hi-speed",
+						                 ChangeHiSpeed{ { hspd.layer, hspd.tick }, before, hspd });
 					context.updateSelectionFlag();
 				}
 				UI::endPropertyTable();
@@ -3377,9 +3397,19 @@ namespace MikuMikuWorld
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
-					if (context.score.layers[hispeed->layer].hiSpeedChanges.erase(hispeed->tick))
+					auto& hispeedChanges = context.score.layers[hispeed->layer].hiSpeedChanges;
+					auto hispeedIt = hispeedChanges.find(hispeed->tick);
+					if (hispeedIt != hispeedChanges.end())
 					{
-						context.pushHistory("Remove hi-speed change");
+						const HiSpeed before = hispeedIt->second;
+						// The selection loses the hi-speed. Undo selects it again
+						SelectionRef selectionBefore = context.getSelectionSnapshot();
+						context.deselectHiSpeed(before);
+						hispeedChanges.erase(hispeedIt);
+						context.pushHistory(
+						    "Remove hi-speed change",
+						    ChangeHiSpeed{ { before.layer, before.tick }, before, std::nullopt },
+						    SelectionChange{ selectionBefore, context.getSelectionSnapshot() });
 						context.updateSelectionFlag();
 					}
 				}
@@ -3412,8 +3442,10 @@ namespace MikuMikuWorld
 						return;
 					}
 					auto&& [_, wp] = *it;
+					const Waypoint before = wp;
 					wp.name = waypoint->name;
-					context.pushHistory("Change waypoint");
+					if (before.name != wp.name)
+						context.pushEdit("Change waypoint", ChangeWaypoint{ wp.ID, before, wp });
 				}
 				UI::endPropertyTable();
 
@@ -3431,9 +3463,11 @@ namespace MikuMikuWorld
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
+					const Fever before = context.score.fever;
 					context.score.fever.startTick = -1;
 					context.score.fever.endTick = -1;
-					context.pushHistory("Remove FEVER event");
+					context.pushEdit("Remove FEVER event",
+					                 ChangeFever{ { before, context.score.fever } });
 				}
 			}
 			else if (Skill* skill = std::get_if<Skill>(&eventEditArgs))
@@ -3460,18 +3494,28 @@ namespace MikuMikuWorld
 						if (!node.empty())
 						{
 							Skill& sk = node.value();
+							const Skill before = sk;
 							sk.effect = skill->effect;
 							sk.level = skill->level;
+							const Skill after = sk;
 							context.score.skills.insert(std::move(node));
-							context.pushHistory("Edit skill trigger");
+							if (before.effect != after.effect || before.level != after.level)
+								context.pushEdit("Edit skill trigger",
+								                 ChangeSkill{ after.tick, before, after });
 						}
 					}
 				}
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
-					context.score.skills.erase(*skill);
-					context.pushHistory("Remove skill trigger");
+					auto skillIt = context.score.skills.find(*skill);
+					if (skillIt != context.score.skills.end())
+					{
+						const Skill before = *skillIt;
+						context.score.skills.erase(skillIt);
+						context.pushEdit("Remove skill trigger",
+						                 ChangeSkill{ before.tick, before, std::nullopt });
+					}
 				}
 			}
 			else

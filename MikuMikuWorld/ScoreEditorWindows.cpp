@@ -1148,11 +1148,8 @@ namespace MikuMikuWorld
 					HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 					h.speed = speed;
 				}
-				if (ImGui::IsItemDeactivated())
-				{
-					context.pushHistory("Change Hispeeds speed");
+				if (ImGui::IsItemDeactivated() && context.pushHiSpeedsEdit("Change Hispeeds speed"))
 					updateState(context);
-				}
 			}
 			else if (state < 0)
 			{
@@ -1162,11 +1159,8 @@ namespace MikuMikuWorld
 					HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 					h.speed = std::clamp(h.speed + offset, -MAX_HISPEED, MAX_HISPEED);
 				}
-				if (ImGui::IsItemDeactivated())
-				{
-					context.pushHistory("Change Hispeeds speed");
+				if (ImGui::IsItemDeactivated() && context.pushHiSpeedsEdit("Change Hispeeds speed"))
 					updateState(context);
-				}
 			}
 			if (context.metadata.isExtendedScore)
 			{
@@ -1179,8 +1173,8 @@ namespace MikuMikuWorld
 						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 						h.ease = hspdEase;
 					}
-					context.pushHistory("Change Hispeeds ease");
-					updateState(context);
+					if (context.pushHiSpeedsEdit("Change Hispeeds ease"))
+						updateState(context);
 				}
 				const char* beatFmtStr = localizeOrInsert(
 				    "__fmt_beat_float",
@@ -1195,11 +1189,9 @@ namespace MikuMikuWorld
 						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 						h.skips = skips;
 					}
-					if (ImGui::IsItemDeactivated())
-					{
-						context.pushHistory("Change Hispeeds skip beat");
+					if (ImGui::IsItemDeactivated() &&
+					    context.pushHiSpeedsEdit("Change Hispeeds skip beat"))
 						updateState(context);
-					}
 				}
 				else if (state < 0)
 				{
@@ -1209,11 +1201,9 @@ namespace MikuMikuWorld
 						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 						h.skips = std::clamp(h.skips + offset, -MAX_HISPEED, MAX_HISPEED);
 					}
-					if (ImGui::IsItemDeactivated())
-					{
-						context.pushHistory("Change Hispeeds skip beat");
+					if (ImGui::IsItemDeactivated() &&
+					    context.pushHiSpeedsEdit("Change Hispeeds skip beat"))
 						updateState(context);
-					}
 				}
 				ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, mixedHideNotes);
 				if (UI::checkboxPropertyRow(Text::hiSpeedHideNotes, hideNotes))
@@ -1223,8 +1213,8 @@ namespace MikuMikuWorld
 						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 						h.hideNotes = hideNotes;
 					}
-					context.pushHistory("Change Hispeeds hide notes");
-					updateState(context);
+					if (context.pushHiSpeedsEdit("Change Hispeeds hide notes"))
+						updateState(context);
 				}
 				ImGui::PopItemFlag();
 			}
@@ -2615,19 +2605,20 @@ namespace MikuMikuWorld
 		if (ImGui::Button(localize(Text::setFeverStart), halfBtnSize))
 		{
 			tick_t currentTick = timeline.getCurrentTick();
-			bool edited = score.fever.startTick != currentTick;
+			const Fever before = score.fever;
 			score.fever.startTick = currentTick;
-			if (edited)
-				timeline.context.pushHistory("Set Fever Start");
+			if (before.startTick != currentTick)
+				timeline.context.pushEdit("Set Fever Start",
+				                          ChangeFever{ { before, score.fever } });
 		}
 		ImGui::SameLine();
 		if (ImGui::Button(localize(Text::setFeverEnd), halfBtnSize))
 		{
 			tick_t currentTick = timeline.getCurrentTick();
-			bool edited = score.fever.endTick != currentTick;
+			const Fever before = score.fever;
 			score.fever.endTick = currentTick;
-			if (edited)
-				timeline.context.pushHistory("Set Fever End");
+			if (before.endTick != currentTick)
+				timeline.context.pushEdit("Set Fever End", ChangeFever{ { before, score.fever } });
 		}
 	}
 }

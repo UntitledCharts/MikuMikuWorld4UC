@@ -13,7 +13,7 @@ namespace MikuMikuWorld
 		HistoryEdit edit;
 		// Selection to restore on undo (before) / redo (after).
 		// When absent, the selection is cleared.
-		std::optional<FieldChange<ScoreSelection>> selection;
+		std::optional<SelectionChange> selection;
 	};
 
 	class HistoryManager
@@ -24,7 +24,7 @@ namespace MikuMikuWorld
 		size_t cursor{ 0 };
 		std::vector<History> historyStack;
 
-		using iterator = std::vector<History>::const_reverse_iterator;
+		using const_iterator = std::vector<History>::const_reverse_iterator;
 
 	  public:
 		void pushHistory(History history);
@@ -37,7 +37,7 @@ namespace MikuMikuWorld
 		bool hasRedo() const;
 		void clear();
 
-		// (newest, first undoable, end): [newest, first undoable) are redoable, newest first.
-		std::tuple<iterator, iterator, iterator> getHistories() const;
+		// (current, begin, end)
+		std::tuple<const_iterator, const_iterator, const_iterator> getHistories() const;
 	};
 }

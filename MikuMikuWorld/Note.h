@@ -211,6 +211,10 @@ namespace MikuMikuWorld
 		HoldNoteCollection holdNotes;
 	};
 
+	// These are purely helpers. They compare the properties only and should not be used as identity comparators.
+	bool isSame(const Note& a, const Note& b);
+	bool isSame(const HoldNoteStep& a, const HoldNoteStep& b);
+
 	void setNotePosition(Note& n1, const Note& n2);
 	void swapNotePosition(Note& n1, Note& n2);
 	void swapNoteProperties(Note& n1, Note& n2);

@@ -6,6 +6,18 @@
 
 namespace MikuMikuWorld
 {
+	bool isSame(const Note& a, const Note& b)
+	{
+		return a.tick == b.tick && a.layer == b.layer && a.type == b.type && a.flag == b.flag &&
+		       a.flick == b.flick && a.ease == b.ease && a.soundEffect == b.soundEffect &&
+		       a.lane == b.lane && a.width == b.width && a.guideAlpha == b.guideAlpha;
+	}
+
+	bool isSame(const HoldNoteStep& a, const HoldNoteStep& b)
+	{
+		return a.flag == b.flag && a.guideColor == b.guideColor && a.layer == b.layer;
+	}
+
 	static std::vector<HoldNoteStep>::iterator holdStepIteratorAt(const Note& step,
 	                                                              std::vector<HoldNoteStep>& steps,
 	                                                              const NoteCollection& notes)
