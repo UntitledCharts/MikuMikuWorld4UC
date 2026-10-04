@@ -154,8 +154,7 @@ namespace MikuMikuWorld
 
 		id_t selectedLayer = 0;
 		ScoreSelection selection;
-		NotesCapture selectionCapture; // State of the selection as of last pushed to history
-		HiSpeedCapture selectionHiSpeedCapture;
+		ScoreCapture selectionCapture; // State of the selection as of last pushed to history
 		SelectionRef selectionSnapshot;
 
 		NoteViewCollection selectedNotes; // fast lookup for selection.notes
@@ -193,6 +192,7 @@ namespace MikuMikuWorld
 		void updateViews();
 		// Clear selection and its view without updating the selection flag
 		void clearNoteSelection();
+		void clearHiSpeedSelection();
 		void clearSelection();
 
 		tick_t getMinTickFromSelection() const;
@@ -238,28 +238,35 @@ namespace MikuMikuWorld
 		void redo();
 		// Legacy: does not record history. TODO(history-migration): replace with typed overload
 		void pushHistory(std::string_view description);
+		// selectionChange: the selection to restore on undo/redo. nullptr clears the selection
 		void pushHistory(std::string_view description, HistoryEdit edit,
-		                 std::optional<SelectionChange> selectionChange = std::nullopt);
+		                 SelectionChange selectionChange = {});
 
-		// Attempt to commit the changes of selected notes to history.
+		// Attempt to push edits of selected items.
 		// Return false if push failed (nothing changed)
-		bool pushNotesEdit(std::string_view description, bool saveSelection = true);
-		// Same as pushNotesEdit for the selected hi-speeds
-		bool pushHiSpeedsEdit(std::string_view description, bool saveSelection = true);
+		bool pushSelectionChanged(std::string_view description);
+		bool pushSelectionEdit(std::string_view description, ScoreCapture&& baseCapture,
+		                       SelectionRef&& selectionBefore);
 		// Pushes an edit that does not change the selection.
 		// saveSelection restores the selection on undo/redo
 		void pushEdit(std::string_view description, HistoryEdit edit, bool saveSelection = true);
+		void pushEdit(std::string_view description, HistoryEdit edit,
+		              SelectionRef&& selectionBefore);
 		// Commit the current working metadata field and push it onto the history
 		template <typename T>
 		inline bool pushWorkingMetadata(T ScoreMetadata::* field, std::string_view description,
 		                                bool deferred = false);
 
-		Note* insertNote(const Note& note, id_t holdID = -1, bool update = true);
+		// update: record the insertion as its own history entry (and finalize the hold)
+		// select: also select the inserted note, the selection is saved with the entry
+		Note* insertNote(const Note& note, id_t holdID = -1, bool update = true,
+		                 bool select = false);
 		// Will affect any view that referencing the note, like selection
 		// Please make a copy if you need to erase them while iterating
 		void eraseNote(Note& note, bool update = true);
 		std::tuple<HoldNote&, Note&, Note&> insertHold(const Note& startNote, const Note& endNote,
-		                                               const HoldNote& hold, bool update = true);
+		                                               const HoldNote& hold, bool update = true,
+		                                               bool select = false);
 		void eraseHold(HoldNote& hold, bool update = true);
 		// Connects two holds together
 		id_t connectHolds(id_t currHoldID, id_t nextHoldID, bool update = true);
@@ -281,6 +288,7 @@ namespace MikuMikuWorld
 	  private:
 		void updateSelectionCapture();
 		void assertNoteSelection();
+		void onHistoryPushed(bool invalidateCapture = true);
 		void onHistoryApplied();
 	};
 
@@ -292,7 +300,7 @@ namespace MikuMikuWorld
 		T& after = workingMetadata.*field;
 		if (before == after)
 			return false;
-		ChangeMetadata edit{ MetadataChange<T>{ field, { before, after } } };
+		MetadataEdit edit{ MetadataChange<T>{ field, { before, after } } };
 		if (!deferred)
 			before = after;
 		pushHistory(description, std::move(edit));

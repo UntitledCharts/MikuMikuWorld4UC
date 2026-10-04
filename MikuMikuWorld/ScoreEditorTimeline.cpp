@@ -1340,7 +1340,7 @@ namespace MikuMikuWorld
 		if (ImGui::IsItemDeactivated())
 		{
 			grabbingNote = -1;
-			if (context.pushNotesEdit("Note update"))
+			if (context.pushSelectionChanged("Note update"))
 				context.updateSelectionFlag();
 		}
 	}
@@ -2721,20 +2721,16 @@ namespace MikuMikuWorld
 			case InsertMode::MakeDummy:
 			case InsertMode::InsertDamage:
 			{
-				Note* insNote = context.insertNote(
-				    previewNote, ImGui::GetIO().KeyShift ? -1 : findHoveringHoldNote());
-				if (insNote && insNote->holdID >= 0 &&
-				    (insNote->type == NoteType::Tick || insNote->isHidden()))
+				Note insNote = previewNote;
+				id_t holdID = ImGui::GetIO().KeyShift ? -1 : findHoveringHoldNote();
+				// Ticks and guide midpoints follow the critical state of the hold segment
+				if (holdID >= 0 && (insNote.canCrit() || insNote.isHidden()))
 				{
-					const HoldNote& hold = context.score.holdNotes.at(insNote->holdID);
-					insNote->flag =
-					    setFlag(insNote->flag, NoteFlag::Critical,
-					            hold.holdStepAt(*insNote, context.score.notes).isCrit());
+					const HoldNote& hold = context.score.holdNotes.at(holdID);
+					bool isCrit = hold.holdStepAt(insNote, context.score.notes).isCrit();
+					insNote.flag = setFlag(insNote.flag, NoteFlag::Critical, isCrit);
 				}
-				if (insNote && ImGui::GetIO().KeyCtrl)
-				{
-					context.selectNote(*insNote, true);
-				}
+				context.insertNote(insNote, holdID, true, ImGui::GetIO().KeyCtrl);
 			}
 
 			break;
@@ -2743,13 +2739,9 @@ namespace MikuMikuWorld
 			case InsertMode::InsertGuide:
 				if (isInsertingHold)
 				{
-					auto&& [_, n1, n2] = context.insertHold(noteStart, noteEnd, previewHold);
+					context.insertHold(noteStart, noteEnd, previewHold, true,
+					                   ImGui::GetIO().KeyCtrl);
 					isInsertingHold = false;
-					if (ImGui::GetIO().KeyCtrl)
-					{
-						context.selectNote(n1, false);
-						context.selectNote(n2);
-					}
 				}
 				else
 				{
@@ -3280,7 +3272,7 @@ namespace MikuMikuWorld
 					    std::clamp(tempo->quarterPerMinute, MIN_BPM, MAX_BPM);
 					if (before.quarterPerMinute != tempoIt->second.quarterPerMinute)
 						context.pushEdit("Change tempo",
-						                 ChangeTempo{ tempo->tick, before, tempoIt->second });
+						                 SingleTempoEdit{ tempo->tick, before, tempoIt->second });
 				}
 				UI::endPropertyTable();
 				ImGui::Separator();
@@ -3294,7 +3286,7 @@ namespace MikuMikuWorld
 						const Tempo before = tempoIt->second;
 						context.score.tempoChanges.erase(tempoIt);
 						context.pushEdit("Remove tempo change",
-						                 ChangeTempo{ tempo->tick, before, std::nullopt });
+						                 SingleTempoEdit{ tempo->tick, before, std::nullopt });
 					}
 				}
 				ImGui::EndDisabled();
@@ -3322,7 +3314,7 @@ namespace MikuMikuWorld
 
 					if (before.numerator != ts.numerator || before.denominator != ts.denominator)
 						context.pushEdit("Change time signature",
-						                 ChangeTimeSignature{ timeSig->measure, before, ts });
+						                 SingleTimeSignatureEdit{ timeSig->measure, before, ts });
 				}
 				UI::endPropertyTable();
 
@@ -3339,7 +3331,7 @@ namespace MikuMikuWorld
 						context.score.timeSignatures.erase(tsIt);
 						context.pushEdit(
 						    "Remove time signature",
-						    ChangeTimeSignature{ timeSig->measure, before, std::nullopt });
+						    SingleTimeSignatureEdit{ timeSig->measure, before, std::nullopt });
 					}
 				}
 				ImGui::EndDisabled();
@@ -3387,8 +3379,9 @@ namespace MikuMikuWorld
 					hspd.ease = hispeed->ease;
 					hspd.hideNotes = hispeed->hideNotes;
 					if (!isSame(before, hspd))
-						context.pushEdit("Change hi-speed",
-						                 ChangeHiSpeed{ { hspd.layer, hspd.tick }, before, hspd });
+						context.pushEdit(
+						    "Change hi-speed",
+						    SingleHiSpeedEdit{ { hspd.layer, hspd.tick }, before, hspd });
 					context.updateSelectionFlag();
 				}
 				UI::endPropertyTable();
@@ -3406,10 +3399,11 @@ namespace MikuMikuWorld
 						SelectionRef selectionBefore = context.getSelectionSnapshot();
 						context.deselectHiSpeed(before);
 						hispeedChanges.erase(hispeedIt);
-						context.pushHistory(
+						context.pushEdit(
 						    "Remove hi-speed change",
-						    ChangeHiSpeed{ { before.layer, before.tick }, before, std::nullopt },
-						    SelectionChange{ selectionBefore, context.getSelectionSnapshot() });
+						    SingleHiSpeedEdit{ layered_tick_t{ before.layer, before.tick }, before,
+						                       std::nullopt },
+						    std::move(selectionBefore));
 						context.updateSelectionFlag();
 					}
 				}
@@ -3445,7 +3439,7 @@ namespace MikuMikuWorld
 					const Waypoint before = wp;
 					wp.name = waypoint->name;
 					if (before.name != wp.name)
-						context.pushEdit("Change waypoint", ChangeWaypoint{ wp.ID, before, wp });
+						context.pushEdit("Change waypoint", SingleWaypointEdit{ wp.ID, before, wp });
 				}
 				UI::endPropertyTable();
 
@@ -3467,7 +3461,7 @@ namespace MikuMikuWorld
 					context.score.fever.startTick = -1;
 					context.score.fever.endTick = -1;
 					context.pushEdit("Remove FEVER event",
-					                 ChangeFever{ { before, context.score.fever } });
+					                 FeverEdit{ { before, context.score.fever } });
 				}
 			}
 			else if (Skill* skill = std::get_if<Skill>(&eventEditArgs))
@@ -3501,7 +3495,7 @@ namespace MikuMikuWorld
 							context.score.skills.insert(std::move(node));
 							if (before.effect != after.effect || before.level != after.level)
 								context.pushEdit("Edit skill trigger",
-								                 ChangeSkill{ after.tick, before, after });
+								                 SingleSkillEdit{ after.tick, before, after });
 						}
 					}
 				}
@@ -3514,7 +3508,7 @@ namespace MikuMikuWorld
 						const Skill before = *skillIt;
 						context.score.skills.erase(skillIt);
 						context.pushEdit("Remove skill trigger",
-						                 ChangeSkill{ before.tick, before, std::nullopt });
+						                 SingleSkillEdit{ before.tick, before, std::nullopt });
 					}
 				}
 			}

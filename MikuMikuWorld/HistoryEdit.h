@@ -23,6 +23,7 @@ namespace MikuMikuWorld
 	};
 
 	// Immutable selection snapshot. Edits made on the same selection share one object
+	// nullptr means nothing is selected
 	using SelectionRef = std::shared_ptr<const ScoreSelection>;
 	using SelectionChange = FieldChange<SelectionRef>;
 
@@ -36,7 +37,7 @@ namespace MikuMikuWorld
 	using MetadataFieldChange = std::variant<MetadataChange<std::string>, MetadataChange<float>,
 	                                         MetadataChange<int>, MetadataChange<bool>>;
 
-	struct ChangeMetadata
+	struct MetadataEdit
 	{
 		MetadataFieldChange change;
 
@@ -44,72 +45,11 @@ namespace MikuMikuWorld
 		void redo(HistoryContext& ctx) const;
 	};
 
-	// ---- Notes -------------------------------------------------------------------------------
-
-	struct NoteChange
-	{
-		id_t id;
-		Note before;
-		Note after;
-	};
-
-	struct HoldChange
-	{
-		id_t id;
-		HoldNote before;
-		HoldNote after;
-	};
-
-	struct ChangeNotes
-	{
-		std::vector<NoteChange> notes;
-		std::vector<HoldChange> holds;
-
-		bool empty() const { return notes.empty() && holds.empty(); }
-		void undo(HistoryContext& ctx) const;
-		void redo(HistoryContext& ctx) const;
-	};
-
-	// Exactly one note changed
-	struct ChangeNote
-	{
-		NoteChange change;
-
-		void undo(HistoryContext& ctx) const;
-		void redo(HistoryContext& ctx) const;
-	};
-
-	using NotesEdit = std::variant<ChangeNote, ChangeNotes>;
-
-	// The state of some notes at a point in time.
-	//
-	// Notes that no longer exist are ignored
-	// Inserting and erasing notes has its own edit types.
-	class NotesCapture : protected NotesContext
-	{
-	  public:
-		void captureNote(const NotesContext& context, id_t noteID);
-		void captureHold(const NotesContext& context, id_t holdID);
-		void clear();
-		// compute the difference between captured notes and current notes
-		// nullopt if nothing changed
-		std::optional<NotesEdit> diff(const NotesContext& context) const;
-	};
-
-	// ---- Score events ------------------------------------------------------------------------
-
-	// One entry of a keyed collection (tempo, time signature, skill, waypoint, hi-speed).
-	// Covers all three edits: insert (no before), change (both) and erase (no after)
-	template <typename K, typename V> struct EntryChange
-	{
-		K key;
-		std::optional<V> before;
-		std::optional<V> after;
-	};
-
+	// ---- Keyed collections
 	// Traits provide Key, Value and `static void set(Score&, const Key&, const optional<Value>&)`
 	// which inserts/replaces the entry or erases it if the value is empty
 
+	// One entry. Covers insert (no before), change (both) and erase (no after)
 	template <typename Traits> struct ChangeEntry
 	{
 		using Key = typename Traits::Key;
@@ -123,28 +63,57 @@ namespace MikuMikuWorld
 		void redo(HistoryContext& ctx) const { Traits::set(ctx.score, key, after); }
 	};
 
-	// Multiple entries, for edits that can affect a group of entries
-	template <typename Traits> struct ChangeEntries
+	template <typename Traits> struct SingleEdit
 	{
 		using Key = typename Traits::Key;
 		using Value = typename Traits::Value;
-		std::vector<EntryChange<Key, Value>> entries;
+		ChangeEntry<Traits> change;
 
-		bool empty() const { return entries.empty(); }
+		SingleEdit(const ChangeEntry<Traits>& c) : change(c) {}
+		SingleEdit(ChangeEntry<Traits>&& c) : change(std::move(c)) {}
+		SingleEdit(Key key, std::optional<Value> before, std::optional<Value> after)
+		    : change{ std::move(key), std::move(before), std::move(after) }
+		{
+		}
+
+		void undo(HistoryContext& ctx) const { change.undo(ctx); }
+		void redo(HistoryContext& ctx) const { change.redo(ctx); }
+	};
+
+	template <typename Traits> struct MultiEdit
+	{
+		std::vector<ChangeEntry<Traits>> changes;
 
 		void undo(HistoryContext& ctx) const
 		{
-			for (auto it = entries.rbegin(); it != entries.rend(); ++it)
-				Traits::set(ctx.score, it->key, it->before);
+			for (auto it = changes.rbegin(); it != changes.rend(); ++it)
+				it->undo(ctx);
 		}
-
 		void redo(HistoryContext& ctx) const
 		{
-			for (const auto& entry : entries)
-				Traits::set(ctx.score, entry.key, entry.after);
+			for (const auto& change : changes)
+				change.redo(ctx);
 		}
 	};
 
+	struct NoteTraits
+	{
+		using Key = id_t;
+		using Value = Note;
+		static void set(Score& score, const Key& key, const std::optional<Value>& value);
+	};
+	struct HoldTraits
+	{
+		using Key = id_t;
+		using Value = HoldNote;
+		static void set(Score& score, const Key& key, const std::optional<Value>& value);
+	};
+	struct HiSpeedTraits
+	{
+		using Key = layered_tick_t;
+		using Value = HiSpeed;
+		static void set(Score& score, const Key& key, const std::optional<Value>& value);
+	};
 	struct TempoTraits
 	{
 		using Key = tick_t;
@@ -169,51 +138,34 @@ namespace MikuMikuWorld
 		using Value = Waypoint;
 		static void set(Score& score, const Key& key, const std::optional<Value>& value);
 	};
-	struct HiSpeedTraits
+
+	using SingleNoteEdit = SingleEdit<NoteTraits>;
+	using SingleHoldEdit = SingleEdit<HoldTraits>;
+	using SingleHiSpeedEdit = SingleEdit<HiSpeedTraits>;
+	using SingleTempoEdit = SingleEdit<TempoTraits>;
+	using SingleTimeSignatureEdit = SingleEdit<TimeSignatureTraits>;
+	using SingleSkillEdit = SingleEdit<SkillTraits>;
+	using SingleWaypointEdit = SingleEdit<WaypointTraits>;
+
+	using MultiNoteEdit = MultiEdit<NoteTraits>;
+	using MultiHoldEdit = MultiEdit<HoldTraits>;
+	using MultiHiSpeedEdit = MultiEdit<HiSpeedTraits>;
+
+	struct ScoreEdit : protected MultiNoteEdit, protected MultiHoldEdit, protected MultiHiSpeedEdit
 	{
-		using Key = layered_tick_t;
-		using Value = HiSpeed;
-		static void set(Score& score, const Key& key, const std::optional<Value>& value);
-	};
+		auto& notes() { return MultiNoteEdit::changes; }
+		auto& holds() { return MultiHoldEdit::changes; }
+		auto& hispeeds() { return MultiHiSpeedEdit::changes; }
 
-	using ChangeTempo = ChangeEntry<TempoTraits>;
-	using ChangeTimeSignature = ChangeEntry<TimeSignatureTraits>;
-	using ChangeSkill = ChangeEntry<SkillTraits>;
-	using ChangeWaypoint = ChangeEntry<WaypointTraits>;
-	using ChangeHiSpeed = ChangeEntry<HiSpeedTraits>;
-	using ChangeHiSpeeds = ChangeEntries<HiSpeedTraits>;
-
-	using HiSpeedsEdit = std::variant<ChangeHiSpeed, ChangeHiSpeeds>;
-
-	struct ChangeFever
-	{
-		FieldChange<Fever> change;
-
+		bool empty() const;
 		void undo(HistoryContext& ctx) const;
 		void redo(HistoryContext& ctx) const;
+		void merge(ScoreEdit&& other);
 	};
 
-	// The state of some hi-speeds at a point in time (see NotesCapture).
-	// Hi-speeds that no longer exist are ignored.
-	class HiSpeedCapture
+	struct FeverEdit
 	{
-	  public:
-		void capture(const Score& score, const layered_tick_t& key);
-		void clear();
-		// compute the difference between captured hi-speeds and current hi-speeds
-		// nullopt if nothing changed
-		std::optional<HiSpeedsEdit> diff(const Score& score) const;
-
-	  private:
-		std::map<layered_tick_t, HiSpeed> hispeeds;
-	};
-
-	// Moving the selection to another layer changes the layer of the notes and moves the
-	// hi-speeds into another layer's collection. It must undo as a whole
-	struct MoveToLayer
-	{
-		ChangeNotes notes;
-		ChangeHiSpeeds hispeeds;
+		FieldChange<Fever> change;
 
 		void undo(HistoryContext& ctx) const;
 		void redo(HistoryContext& ctx) const;
@@ -222,15 +174,41 @@ namespace MikuMikuWorld
 	// Every alternative must provide:
 	// void undo(HistoryContext&) const;
 	// void redo(HistoryContext&) const;
-	using HistoryEdit = std::variant<ChangeMetadata, ChangeNote, ChangeNotes, ChangeHiSpeed,
-	                                 ChangeHiSpeeds, ChangeTempo, ChangeTimeSignature, ChangeSkill,
-	                                 ChangeWaypoint, ChangeFever, MoveToLayer>;
+	using HistoryEdit = std::variant<MetadataEdit, SingleNoteEdit, SingleHoldEdit,
+	                                 SingleHiSpeedEdit, SingleTempoEdit, SingleTimeSignatureEdit,
+	                                 SingleSkillEdit, SingleWaypointEdit, FeverEdit, ScoreEdit>;
 
-	// Widens one of the diff() results into a HistoryEdit
-	template <typename... Ts> HistoryEdit toHistoryEdit(std::variant<Ts...>&& edit)
+	// Convert to HistoryEdit, collapse to Single*Edit variance when possible
+	HistoryEdit toHistoryEdit(ScoreEdit&& edit);
+
+	// Use to capture what an edit does to the score(notes, holds, hispeeds)
+	class ScoreCapture
 	{
-		return std::visit([](auto&& e) -> HistoryEdit { return std::move(e); }, std::move(edit));
-	}
+	  public:
+		void captureNote(const NotesContext& context, id_t noteID);
+		// Captures the hold and all of its steps
+		void captureHold(const NotesContext& context, id_t holdID);
+		void captureHiSpeed(const Score& score, const layered_tick_t& key);
+
+		void clear();
+		void clearNotes();
+		void clearHispeeds();
+
+		// compute the changes between the captured state and the current score
+		// nullopt if nothing was changed
+		std::optional<ScoreEdit> diffChanges(const Score& score) const;
+		// compute the edits(change/add/erase) between the captured state and the after state
+		// nullopt if nothing was edited
+		// unlike diffChanges():
+		// a captured object that no longer exists counts as erased
+		// an object that exists now but wasn't captured before counts as inserted
+		std::optional<ScoreEdit> diffAll(const ScoreCapture& afterCapture) const;
+
+	  private:
+		NoteCollection notes;
+		HoldNoteCollection holdNotes;
+		std::map<layered_tick_t, HiSpeed> hispeeds;
+	};
 
 	void undoEdit(const HistoryEdit& edit, HistoryContext& ctx);
 	void redoEdit(const HistoryEdit& edit, HistoryContext& ctx);

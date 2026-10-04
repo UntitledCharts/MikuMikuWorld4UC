@@ -12,8 +12,8 @@ namespace MikuMikuWorld
 		std::string description;
 		HistoryEdit edit;
 		// Selection to restore on undo (before) / redo (after).
-		// When absent, the selection is cleared.
-		std::optional<SelectionChange> selection;
+		// A null SelectionRef clears the selection.
+		SelectionChange selection;
 	};
 
 	class HistoryManager

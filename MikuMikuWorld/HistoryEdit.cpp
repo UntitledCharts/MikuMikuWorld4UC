@@ -1,18 +1,18 @@
 #include "HistoryEdit.h"
+#include "Utilities.h"
 #include <algorithm>
 
 namespace MikuMikuWorld
 {
+	// Helpers
 	namespace
 	{
-		// Both notes are the same note of the same score here (found by the same ID),
-		// so unlike isSame() the relationships are part of the comparison too
-		static bool unchanged(const Note& a, const Note& b)
+		static bool operator==(const Note& a, const Note& b)
 		{
 			return isSame(a, b) && a.holdID == b.holdID;
 		}
 
-		bool unchanged(const HoldNote& a, const HoldNote& b)
+		static bool operator==(const HoldNote& a, const HoldNote& b)
 		{
 			return a.fadeType == b.fadeType && a.steps == b.steps && a.joints == b.joints &&
 			       a.separators.size() == b.separators.size() &&
@@ -20,45 +20,165 @@ namespace MikuMikuWorld
 			                  [](const HoldNoteStep& x, const HoldNoteStep& y)
 			                  { return x.ID == y.ID && isSame(x, y); });
 		}
+
+		template <typename Container, typename = void> struct has_reserve : std::false_type
+		{
+		};
+
+		template <typename T>
+		using reserve_return_t =
+		    decltype(std::declval<T&>().reserve(std::declval<typename T::size_type>()));
+
+		template <typename Container>
+		struct has_reserve<Container, std::void_t<reserve_return_t<Container>>> : std::true_type
+		{
+		};
+
+		template <typename Container> void moveExtend(Container& base, Container&& other)
+		{
+			if constexpr (has_reserve<Container>::value)
+			{
+				base.reserve(base.size() + other.size());
+			}
+			base.insert(base.end(), std::make_move_iterator(other.begin()),
+			            std::make_move_iterator(other.end()));
+			other.clear();
+		}
+
+		template <typename T> struct is_std_map : std::false_type
+		{
+		};
+
+		template <typename K, typename V, typename C, typename A>
+		struct is_std_map<std::map<K, V, C, A>> : std::true_type
+		{
+		};
+
+		template <typename M, typename FIt, typename FDf, typename FRDf>
+		typename std::enable_if<is_std_map<M>::value>::type
+		for_each_relations(const M& map1, const M& map2, FIt onIntersect, FDf onDifference,
+		                   FRDf onRevDifference)
+		{
+			auto it1 = map1.begin();
+			auto it2 = map2.begin();
+			while (it1 != map1.end() && it2 != map2.end())
+			{
+				if (it1->first < it2->first)
+				{
+					onDifference(*it1);
+					++it1;
+				}
+				else if (it2->first < it1->first)
+				{
+					onRevDifference(*it2);
+					++it2;
+				}
+				else
+				{
+					onIntersect(*it1, *it2);
+					++it1;
+					++it2;
+				}
+			}
+			while (it1 != map1.end())
+			{
+				onDifference(*it1);
+				++it1;
+			}
+			while (it2 != map2.end())
+			{
+				onRevDifference(*it2);
+				++it2;
+			}
+		}
+
+		template <typename M, typename FIt, typename FDf, typename FRDf>
+		typename std::enable_if<is_std_map<M>::value == false>::type
+		for_each_relations(const M& map1, const M& map2, FIt onIntersect, FDf onDifference,
+		                   FRDf onRevDifference)
+		{
+			for (auto it1 = map1.begin(); it1 != map1.end(); ++it1)
+			{
+				auto it2 = map2.find(it1->first);
+				if (it2 != map2.end())
+					onIntersect(*it1, *it2);
+				else
+					onDifference(*it1);
+			}
+			for (auto it2 = map2.begin(); it2 != map2.end(); ++it2)
+			{
+				if (map1.find(it2->first) == map1.end())
+					onRevDifference(*it2);
+			}
+		}
 	}
 
-	void ChangeMetadata::undo(HistoryContext& ctx) const
+	void MetadataEdit::undo(HistoryContext& ctx) const
 	{
 		std::visit([&](const auto& c) { ctx.metadata.*(c.field) = c.change.before; }, change);
 	}
 
-	void ChangeMetadata::redo(HistoryContext& ctx) const
+	void MetadataEdit::redo(HistoryContext& ctx) const
 	{
 		std::visit([&](const auto& c) { ctx.metadata.*(c.field) = c.change.after; }, change);
 	}
 
-	void ChangeNotes::undo(HistoryContext& ctx) const
+	void NoteTraits::set(Score& score, const Key& key, const std::optional<Value>& value)
 	{
-		for (const auto& c : notes)
-			ctx.score.notes.at(c.id) = c.before;
-		for (const auto& c : holds)
-			ctx.score.holdNotes.at(c.id) = c.before;
+		if (value)
+			score.notes.insert_or_assign(key, *value);
+		else
+			score.notes.erase(key);
 	}
 
-	void ChangeNotes::redo(HistoryContext& ctx) const
+	void HoldTraits::set(Score& score, const Key& key, const std::optional<Value>& value)
 	{
-		for (const auto& c : notes)
-			ctx.score.notes.at(c.id) = c.after;
-		for (const auto& c : holds)
-			ctx.score.holdNotes.at(c.id) = c.after;
+		if (value)
+			score.holdNotes.insert_or_assign(key, *value);
+		else
+			score.holdNotes.erase(key);
 	}
 
-	void ChangeNote::undo(HistoryContext& ctx) const
+	bool ScoreEdit::empty() const
 	{
-		ctx.score.notes.at(change.id) = change.before;
+		return MultiNoteEdit::changes.empty() && MultiHoldEdit::changes.empty() &&
+		       MultiHiSpeedEdit::changes.empty();
 	}
 
-	void ChangeNote::redo(HistoryContext& ctx) const
+	void ScoreEdit::undo(HistoryContext& ctx) const
 	{
-		ctx.score.notes.at(change.id) = change.after;
+		MultiNoteEdit::undo(ctx);
+		MultiHoldEdit::undo(ctx);
+		MultiHiSpeedEdit::undo(ctx);
 	}
 
-	void NotesCapture::captureNote(const NotesContext& context, id_t noteID)
+	void ScoreEdit::redo(HistoryContext& ctx) const
+	{
+		MultiNoteEdit::redo(ctx);
+		MultiHoldEdit::redo(ctx);
+		MultiHiSpeedEdit::redo(ctx);
+	}
+
+	void ScoreEdit::merge(ScoreEdit&& other)
+	{
+		moveExtend(notes(), std::move(other.notes()));
+		moveExtend(holds(), std::move(other.holds()));
+		moveExtend(hispeeds(), std::move(other.hispeeds()));
+	}
+
+	HistoryEdit toHistoryEdit(ScoreEdit&& edit)
+	{
+		bool singleEdit = edit.notes().size() + edit.holds().size() + edit.hispeeds().size() == 1;
+		if (edit.notes().size() == 1 && singleEdit)
+			return SingleNoteEdit{ std::move(edit.notes().front()) };
+		if (edit.holds().size() == 1 && singleEdit)
+			return SingleHoldEdit{ std::move(edit.holds().front()) };
+		if (edit.hispeeds().size() == 1 && singleEdit)
+			return SingleHiSpeedEdit{ std::move(edit.hispeeds().front()) };
+		return std::move(edit);
+	}
+
+	void ScoreCapture::captureNote(const NotesContext& context, id_t noteID)
 	{
 		if (notes.count(noteID))
 			return;
@@ -67,7 +187,7 @@ namespace MikuMikuWorld
 			notes.emplace(noteID, it->second);
 	}
 
-	void NotesCapture::captureHold(const NotesContext& context, id_t holdID)
+	void ScoreCapture::captureHold(const NotesContext& context, id_t holdID)
 	{
 		if (holdNotes.count(holdID))
 			return;
@@ -80,34 +200,106 @@ namespace MikuMikuWorld
 			captureNote(context, step);
 	}
 
-	void NotesCapture::clear()
+	void ScoreCapture::captureHiSpeed(const Score& score, const layered_tick_t& key)
+	{
+		auto&& [layer, tick] = key;
+		if (hispeeds.count(key) || !isArrayIndexInBounds(layer, score.layers))
+			return;
+
+		const HiSpeedCollection& hiSpeedChanges = score.layers[layer].hiSpeedChanges;
+		auto it = hiSpeedChanges.find(tick);
+		if (it != hiSpeedChanges.end())
+			hispeeds.emplace(key, it->second);
+	}
+
+	void ScoreCapture::clearNotes()
 	{
 		notes.clear();
 		holdNotes.clear();
 	}
 
-	std::optional<NotesEdit> NotesCapture::diff(const NotesContext& context) const
+	void ScoreCapture::clearHispeeds() { hispeeds.clear(); }
+
+	void ScoreCapture::clear()
 	{
-		ChangeNotes edit;
+		clearNotes();
+		clearHispeeds();
+	}
+
+	std::optional<ScoreEdit> ScoreCapture::diffChanges(const Score& score) const
+	{
+		ScoreEdit edit;
 		for (const auto& [id, before] : notes)
 		{
-			auto it = context.notes.find(id);
-			if (it != context.notes.end() && !unchanged(before, it->second))
-				edit.notes.push_back({ id, before, it->second });
+			auto it = score.notes.find(id);
+			if (it == score.notes.end() || before == it->second)
+				continue;
+			edit.notes().push_back({ id, before, it->second });
 		}
 		for (const auto& [id, before] : holdNotes)
 		{
-			auto it = context.holdNotes.find(id);
-			if (it != context.holdNotes.end() && !unchanged(before, it->second))
-				edit.holds.push_back({ id, before, it->second });
+			auto it = score.holdNotes.find(id);
+			if (it == score.holdNotes.end() || before == it->second)
+				continue;
+			edit.holds().push_back({ id, before, it->second });
+		}
+		for (const auto& [key, before] : hispeeds)
+		{
+			if (!isArrayIndexInBounds(key.first, score.layers))
+				continue;
+			const HiSpeedCollection& hiSpeedChanges = score.layers[key.first].hiSpeedChanges;
+			auto it = hiSpeedChanges.find(key.second);
+			if (it == hiSpeedChanges.end() || isSame(before, it->second))
+				continue;
+			edit.hispeeds().push_back({ key, before, it->second });
 		}
 
 		if (edit.empty())
 			return std::nullopt;
-		// Use single edit if there's only 1 note
-		if (edit.notes.size() == 1 && edit.holds.empty())
-			return ChangeNote{ std::move(edit.notes.front()) };
-		return std::move(edit);
+		return edit;
+	}
+
+	std::optional<ScoreEdit> ScoreCapture::diffAll(const ScoreCapture& afterCapture) const
+	{
+		ScoreEdit edit;
+
+		for_each_relations(
+		    notes, afterCapture.notes, [&](auto& kvBefore, auto& kvAfter)
+		    {
+			    if (!(kvBefore.second == kvAfter.second))
+				    edit.notes().push_back({ kvBefore.first, kvBefore.second, kvAfter.second });
+		    },
+		    [&](auto& kvBefore)
+		    { edit.notes().push_back({ kvBefore.first, kvBefore.second, std::nullopt }); },
+		    [&](auto& kvAfter)
+		    { edit.notes().push_back({ kvAfter.first, std::nullopt, kvAfter.second }); });
+
+		for_each_relations(
+		    holdNotes, afterCapture.holdNotes, [&](auto& kvBefore, auto& kvAfter)
+		    {
+			    if (!(kvBefore.second == kvAfter.second))
+				    edit.holds().push_back({ kvBefore.first, kvBefore.second, kvAfter.second });
+		    },
+		    [&](auto& kvBefore)
+		    { edit.holds().push_back({ kvBefore.first, kvBefore.second, std::nullopt }); },
+		    [&](auto& kvAfter)
+		    { edit.holds().push_back({ kvAfter.first, std::nullopt, kvAfter.second }); });
+
+		for_each_relations(
+		    hispeeds, afterCapture.hispeeds, [&](auto& kvBefore, auto& kvAfter)
+		    {
+			    if (!isSame(kvBefore.second, kvAfter.second))
+				    edit.hispeeds().push_back(
+				        { kvBefore.first, kvBefore.second, kvAfter.second });
+		    },
+		    [&](auto& kvBefore)
+		    { edit.hispeeds().push_back({ kvBefore.first, kvBefore.second, std::nullopt }); },
+		    [&](auto& kvAfter)
+		    { edit.hispeeds().push_back({ kvAfter.first, std::nullopt, kvAfter.second }); });
+
+		if (edit.empty())
+			return std::nullopt;
+		return edit;
 	}
 
 	void TempoTraits::set(Score& score, const Key& key, const std::optional<Value>& value)
@@ -144,69 +336,21 @@ namespace MikuMikuWorld
 
 	void HiSpeedTraits::set(Score& score, const Key& key, const std::optional<Value>& value)
 	{
+		auto&& [layer, tick] = key;
 		// Edits on the layers themselves are responsible for restoring them
-		if (key.first < 0 || key.first >= static_cast<id_t>(score.layers.size()))
+		if (!isArrayIndexInBounds(layer, score.layers))
 			return;
 
-		HiSpeedCollection& collection = score.layers[key.first].hiSpeedChanges;
+		HiSpeedCollection& hiSpeedChanges = score.layers[layer].hiSpeedChanges;
 		if (value)
-			collection.insert_or_assign(key.second, *value);
+			hiSpeedChanges.insert_or_assign(key.second, *value);
 		else
-			collection.erase(key.second);
+			hiSpeedChanges.erase(key.second);
 	}
 
-	void ChangeFever::undo(HistoryContext& ctx) const { ctx.score.fever = change.before; }
+	void FeverEdit::undo(HistoryContext& ctx) const { ctx.score.fever = change.before; }
 
-	void ChangeFever::redo(HistoryContext& ctx) const { ctx.score.fever = change.after; }
-
-	void HiSpeedCapture::capture(const Score& score, const layered_tick_t& key)
-	{
-		if (hispeeds.count(key) || key.first < 0 ||
-		    key.first >= static_cast<id_t>(score.layers.size()))
-			return;
-
-		const HiSpeedCollection& collection = score.layers[key.first].hiSpeedChanges;
-		auto it = collection.find(key.second);
-		if (it != collection.end())
-			hispeeds.emplace(key, it->second);
-	}
-
-	void HiSpeedCapture::clear() { hispeeds.clear(); }
-
-	std::optional<HiSpeedsEdit> HiSpeedCapture::diff(const Score& score) const
-	{
-		ChangeHiSpeeds edit;
-		for (const auto& [key, before] : hispeeds)
-		{
-			if (key.first < 0 || key.first >= static_cast<id_t>(score.layers.size()))
-				continue;
-			const HiSpeedCollection& collection = score.layers[key.first].hiSpeedChanges;
-			auto it = collection.find(key.second);
-			if (it != collection.end() && !isSame(before, it->second))
-				edit.entries.push_back({ key, before, it->second });
-		}
-
-		if (edit.empty())
-			return std::nullopt;
-		if (edit.entries.size() == 1)
-		{
-			auto& entry = edit.entries.front();
-			return ChangeHiSpeed{ entry.key, std::move(entry.before), std::move(entry.after) };
-		}
-		return std::move(edit);
-	}
-
-	void MoveToLayer::undo(HistoryContext& ctx) const
-	{
-		hispeeds.undo(ctx);
-		notes.undo(ctx);
-	}
-
-	void MoveToLayer::redo(HistoryContext& ctx) const
-	{
-		notes.redo(ctx);
-		hispeeds.redo(ctx);
-	}
+	void FeverEdit::redo(HistoryContext& ctx) const { ctx.score.fever = change.after; }
 
 	void undoEdit(const HistoryEdit& edit, HistoryContext& ctx)
 	{

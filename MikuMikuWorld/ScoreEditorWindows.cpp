@@ -870,7 +870,7 @@ namespace MikuMikuWorld
 					{
 						quarter = ticksToQuarters(tick);
 						if (ImGui::IsItemDeactivated())
-							context.pushHistory("Move note");
+							context.pushSelectionChanged("Move note");
 					}
 				}
 				else if (state > 0)
@@ -898,7 +898,7 @@ namespace MikuMikuWorld
 						{
 							tick = oldTick;
 							if (ImGui::IsItemDeactivated())
-								context.pushHistory("Move note");
+								context.pushSelectionChanged("Move note");
 						}
 					}
 					else if (state > 0)
@@ -942,7 +942,7 @@ namespace MikuMikuWorld
 					{
 						lane = oldLane;
 						if (ImGui::IsItemDeactivated())
-							context.pushHistory("Move note");
+							context.pushSelectionChanged("Move note");
 					}
 				}
 				else if (state > 0)
@@ -964,7 +964,7 @@ namespace MikuMikuWorld
 						                          context.maxNoteWidth(pnote->lane));
 					if (ImGui::IsItemDeactivated())
 					{
-						context.pushHistory("Edit note width");
+						context.pushSelectionChanged("Edit note width");
 						context.updateSelectionFlag();
 					}
 				}
@@ -973,7 +973,7 @@ namespace MikuMikuWorld
 					for (auto& [id, pnote] : context.selectedNotes)
 						pnote->width = std::clamp(width, context.minNoteWidth(),
 						                          context.maxNoteWidth(pnote->lane));
-					context.pushHistory("Edit note width");
+					context.pushSelectionChanged("Edit note width");
 					context.updateSelectionFlag();
 				}
 
@@ -1148,7 +1148,8 @@ namespace MikuMikuWorld
 					HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 					h.speed = speed;
 				}
-				if (ImGui::IsItemDeactivated() && context.pushHiSpeedsEdit("Change Hispeeds speed"))
+				if (ImGui::IsItemDeactivated() &&
+				    context.pushSelectionChanged("Change Hispeeds speed"))
 					updateState(context);
 			}
 			else if (state < 0)
@@ -1159,7 +1160,8 @@ namespace MikuMikuWorld
 					HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 					h.speed = std::clamp(h.speed + offset, -MAX_HISPEED, MAX_HISPEED);
 				}
-				if (ImGui::IsItemDeactivated() && context.pushHiSpeedsEdit("Change Hispeeds speed"))
+				if (ImGui::IsItemDeactivated() &&
+				    context.pushSelectionChanged("Change Hispeeds speed"))
 					updateState(context);
 			}
 			if (context.metadata.isExtendedScore)
@@ -1173,7 +1175,7 @@ namespace MikuMikuWorld
 						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 						h.ease = hspdEase;
 					}
-					if (context.pushHiSpeedsEdit("Change Hispeeds ease"))
+					if (context.pushSelectionChanged("Change Hispeeds ease"))
 						updateState(context);
 				}
 				const char* beatFmtStr = localizeOrInsert(
@@ -1190,7 +1192,7 @@ namespace MikuMikuWorld
 						h.skips = skips;
 					}
 					if (ImGui::IsItemDeactivated() &&
-					    context.pushHiSpeedsEdit("Change Hispeeds skip beat"))
+					    context.pushSelectionChanged("Change Hispeeds skip beat"))
 						updateState(context);
 				}
 				else if (state < 0)
@@ -1202,7 +1204,7 @@ namespace MikuMikuWorld
 						h.skips = std::clamp(h.skips + offset, -MAX_HISPEED, MAX_HISPEED);
 					}
 					if (ImGui::IsItemDeactivated() &&
-					    context.pushHiSpeedsEdit("Change Hispeeds skip beat"))
+					    context.pushSelectionChanged("Change Hispeeds skip beat"))
 						updateState(context);
 				}
 				ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, mixedHideNotes);
@@ -1213,7 +1215,7 @@ namespace MikuMikuWorld
 						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
 						h.hideNotes = hideNotes;
 					}
-					if (context.pushHiSpeedsEdit("Change Hispeeds hide notes"))
+					if (context.pushSelectionChanged("Change Hispeeds hide notes"))
 						updateState(context);
 				}
 				ImGui::PopItemFlag();
@@ -2608,8 +2610,7 @@ namespace MikuMikuWorld
 			const Fever before = score.fever;
 			score.fever.startTick = currentTick;
 			if (before.startTick != currentTick)
-				timeline.context.pushEdit("Set Fever Start",
-				                          ChangeFever{ { before, score.fever } });
+				timeline.context.pushEdit("Set Fever Start", FeverEdit{ { before, score.fever } });
 		}
 		ImGui::SameLine();
 		if (ImGui::Button(localize(Text::setFeverEnd), halfBtnSize))
@@ -2618,7 +2619,7 @@ namespace MikuMikuWorld
 			const Fever before = score.fever;
 			score.fever.endTick = currentTick;
 			if (before.endTick != currentTick)
-				timeline.context.pushEdit("Set Fever End", ChangeFever{ { before, score.fever } });
+				timeline.context.pushEdit("Set Fever End", FeverEdit{ { before, score.fever } });
 		}
 	}
 }
