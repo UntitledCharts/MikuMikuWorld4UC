@@ -1777,7 +1777,8 @@ namespace MikuMikuWorld
 		for (const auto& holdID : updatingHold)
 			score.holdNotes.at(holdID).sortSteps(score.notes, !metadata.isExtendedScore);
 
-		pushSelectionEdit("Compress selection", std::move(beforeCapture), std::move(selectionBefore));
+		pushSelectionEdit("Compress selection", std::move(beforeCapture),
+		                  std::move(selectionBefore));
 	}
 
 	void ScoreContext::connectHoldsInSelection()
@@ -1935,8 +1936,8 @@ namespace MikuMikuWorld
 			ScoreCapture afterCapture = beforeCapture.recapture(score);
 			afterCapture.merge(selectionCapture);
 			afterCapture.captureCreated(score, beforeNoteID, nextNoteID, beforeHoldID, nextHoldID);
-			pushEdit("Convert slides into traces", std::move(beforeCapture), std::move(afterCapture),
-			         std::move(selectionBefore));
+			pushEdit("Convert slides into traces", std::move(beforeCapture),
+			         std::move(afterCapture), std::move(selectionBefore));
 		}
 	}
 
@@ -1988,7 +1989,8 @@ namespace MikuMikuWorld
 		if (insertedHispeed.size())
 		{
 			updateSelectionFlag();
-			pushSelectionEdit("Lerp hispeeds", std::move(beforeCapture), std::move(selectionBefore));
+			pushSelectionEdit("Lerp hispeeds", std::move(beforeCapture),
+			                  std::move(selectionBefore));
 		}
 	}
 
@@ -2230,7 +2232,13 @@ namespace MikuMikuWorld
 		onHistoryApplied();
 	}
 
-	void ScoreContext::onHistoryPushed(bool invalidateCapture) {}
+	void ScoreContext::onHistoryPushed(bool invalidateCapture)
+	{
+		scoreStats.calculateStats(score);
+		upToDate = false;
+		if (invalidateCapture)
+			updateSelectionCapture();
+	}
 
 	// Rebuild everything derived from the persistent state after an undo/redo
 	void ScoreContext::onHistoryApplied()
@@ -3082,12 +3090,13 @@ namespace MikuMikuWorld
 
 		if (isExtended)
 			pushEdit("Change score extension",
-			         MetadataEdit{ MetadataChange<bool>{ &ScoreMetadata::isExtendedScore,
-			                                             { false, true } } },
+			         MetadataEdit{
+			             MetadataChange<bool>{ &ScoreMetadata::isExtendedScore, { false, true } } },
 			         false);
 		else
 			pushEdit("Change score extension",
-			         ScoreExtensionEdit{ { std::move(scoreBefore), std::make_unique<const Score>(score) } },
+			         ScoreExtensionEdit{
+			             { std::move(scoreBefore), std::make_unique<const Score>(score) } },
 			         false);
 	}
 
