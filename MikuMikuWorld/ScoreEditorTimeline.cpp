@@ -212,6 +212,9 @@ namespace MikuMikuWorld
 			float x = toScreenPosX(note.lane), y = toScreenPosY(noteTime) - noteHeight / 2;
 			ImVec2 p1 = { x - PADDING, y };
 			ImVec2 p2 = { x + PADDING + toScreenWidth(note.width), y + noteHeight };
+			if (p1.x > maxScreenPos.x || p2.x < absScreenPos.x || p1.y > maxScreenPos.y ||
+			    p2.y < absScreenPos.y)
+				continue;
 
 			drawList->AddRectFilled(p1, p2, 0x20f4f4f4, 2.0f, ImDrawFlags_RoundCornersAll);
 			drawList->AddRect(p1, p2, 0xcccccccc, 2.0f, ImDrawFlags_RoundCornersAll, 2.0f);
