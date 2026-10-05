@@ -193,6 +193,8 @@ namespace MikuMikuWorld
 		bool drawHoldStepOutlines = true;
 		SnapMode snapMode = SnapMode::Relative;
 		InsertMode insMode = InsertMode::Select;
+		// Track undo/redo while the editor is openned
+		int eventEditHistoryCursor = 0;
 
 		NotesContext previewNotes;
 		EventArgs eventEditArgs;

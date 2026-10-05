@@ -187,7 +187,7 @@ namespace MikuMikuWorld
 			notes.emplace(noteID, it->second);
 	}
 
-	void ScoreCapture::captureHold(const NotesContext& context, id_t holdID)
+	void ScoreCapture::captureHold(const NotesContext& context, id_t holdID, bool steps)
 	{
 		if (holdNotes.count(holdID))
 			return;
@@ -196,6 +196,8 @@ namespace MikuMikuWorld
 			return;
 		const HoldNote& hold = it->second;
 		holdNotes.emplace(holdID, hold);
+		if (!steps)
+			return;
 		for (id_t step : hold.steps)
 			captureNote(context, step);
 	}
@@ -210,6 +212,42 @@ namespace MikuMikuWorld
 		auto it = hiSpeedChanges.find(tick);
 		if (it != hiSpeedChanges.end())
 			hispeeds.emplace(key, it->second);
+	}
+
+	void ScoreCapture::captureCreated(const Score& score, id_t beforeNoteID, id_t afterNoteID,
+	                                  id_t beforeHoldID, id_t afterHoldID)
+	{
+		for (id_t id = beforeNoteID; id < afterNoteID; ++id)
+			captureNote(score, id);
+		for (id_t id = beforeHoldID; id < afterHoldID; ++id)
+			captureHold(score, id, false);
+	}
+
+	void ScoreCapture::merge(const ScoreCapture& other)
+	{
+		notes.insert(other.notes.begin(), other.notes.end());
+		holdNotes.insert(other.holdNotes.begin(), other.holdNotes.end());
+		hispeeds.insert(other.hispeeds.begin(), other.hispeeds.end());
+	}
+
+	ScoreCapture ScoreCapture::recapture(const Score& score) const
+	{
+		ScoreCapture capture;
+		for (const auto& [id, _] : notes)
+		{
+			auto it = score.notes.find(id);
+			if (it != score.notes.end())
+				capture.notes.emplace(id, it->second);
+		}
+		for (const auto& [id, _] : holdNotes)
+		{
+			auto it = score.holdNotes.find(id);
+			if (it != score.holdNotes.end())
+				capture.holdNotes.emplace(id, it->second);
+		}
+		for (const auto& [key, _] : hispeeds)
+			capture.captureHiSpeed(score, key);
+		return capture;
 	}
 
 	void ScoreCapture::clearNotes()
@@ -264,7 +302,8 @@ namespace MikuMikuWorld
 		ScoreEdit edit;
 
 		for_each_relations(
-		    notes, afterCapture.notes, [&](auto& kvBefore, auto& kvAfter)
+		    notes, afterCapture.notes,
+		    [&](auto& kvBefore, auto& kvAfter)
 		    {
 			    if (!(kvBefore.second == kvAfter.second))
 				    edit.notes().push_back({ kvBefore.first, kvBefore.second, kvAfter.second });
@@ -275,7 +314,8 @@ namespace MikuMikuWorld
 		    { edit.notes().push_back({ kvAfter.first, std::nullopt, kvAfter.second }); });
 
 		for_each_relations(
-		    holdNotes, afterCapture.holdNotes, [&](auto& kvBefore, auto& kvAfter)
+		    holdNotes, afterCapture.holdNotes,
+		    [&](auto& kvBefore, auto& kvAfter)
 		    {
 			    if (!(kvBefore.second == kvAfter.second))
 				    edit.holds().push_back({ kvBefore.first, kvBefore.second, kvAfter.second });
@@ -286,11 +326,11 @@ namespace MikuMikuWorld
 		    { edit.holds().push_back({ kvAfter.first, std::nullopt, kvAfter.second }); });
 
 		for_each_relations(
-		    hispeeds, afterCapture.hispeeds, [&](auto& kvBefore, auto& kvAfter)
+		    hispeeds, afterCapture.hispeeds,
+		    [&](auto& kvBefore, auto& kvAfter)
 		    {
 			    if (!isSame(kvBefore.second, kvAfter.second))
-				    edit.hispeeds().push_back(
-				        { kvBefore.first, kvBefore.second, kvAfter.second });
+				    edit.hispeeds().push_back({ kvBefore.first, kvBefore.second, kvAfter.second });
 		    },
 		    [&](auto& kvBefore)
 		    { edit.hispeeds().push_back({ kvBefore.first, kvBefore.second, std::nullopt }); },
@@ -346,6 +386,55 @@ namespace MikuMikuWorld
 			hiSpeedChanges.insert_or_assign(key.second, *value);
 		else
 			hiSpeedChanges.erase(key.second);
+	}
+
+	void ScoreExtensionEdit::undo(HistoryContext& ctx) const
+	{
+		ctx.score = *score.before;
+		ctx.metadata.isExtendedScore = true;
+	}
+
+	void ScoreExtensionEdit::redo(HistoryContext& ctx) const
+	{
+		ctx.score = *score.after;
+		ctx.metadata.isExtendedScore = false;
+	}
+
+	void LayerEdit::undo(HistoryContext& ctx) const
+	{
+		ctx.score.layers = layers.before;
+		for (const auto& change : notes)
+			change.undo(ctx);
+	}
+
+	void LayerEdit::redo(HistoryContext& ctx) const
+	{
+		ctx.score.layers = layers.after;
+		for (const auto& change : notes)
+			change.redo(ctx);
+	}
+
+	LayerCapture::LayerCapture(const Score& score) : layers(score.layers)
+	{
+		noteLayers.reserve(score.notes.size());
+		for (const auto& [id, note] : score.notes)
+			noteLayers.emplace(id, note.layer);
+	}
+
+	LayerEdit LayerCapture::diff(const Score& score) const
+	{
+		LayerEdit edit{ { layers, score.layers }, {} };
+		for (const auto& [id, layer] : noteLayers)
+		{
+			auto it = score.notes.find(id);
+			if (it == score.notes.end() || it->second.layer == layer)
+				continue;
+			// Only the layer of a note changes in a layer edit
+			Note before = it->second;
+			before.layer = layer;
+			edit.notes.push_back({ id, before, it->second });
+		}
+		return edit;
 	}
 
 	void FeverEdit::undo(HistoryContext& ctx) const { ctx.score.fever = change.before; }

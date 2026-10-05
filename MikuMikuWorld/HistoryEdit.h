@@ -171,12 +171,32 @@ namespace MikuMikuWorld
 		void redo(HistoryContext& ctx) const;
 	};
 
+	struct ScoreExtensionEdit
+	{
+		// boxed to keep HistoryEdit small.
+		FieldChange<std::unique_ptr<const Score>> score;
+
+		void undo(HistoryContext& ctx) const;
+		void redo(HistoryContext& ctx) const;
+	};
+
+	// Created, merged, reordered, hidden and renamed in the layer window.
+	struct LayerEdit
+	{
+		FieldChange<LayerCollection> layers;
+		std::vector<ChangeEntry<NoteTraits>> notes;
+
+		void undo(HistoryContext& ctx) const;
+		void redo(HistoryContext& ctx) const;
+	};
+
 	// Every alternative must provide:
 	// void undo(HistoryContext&) const;
 	// void redo(HistoryContext&) const;
-	using HistoryEdit = std::variant<MetadataEdit, SingleNoteEdit, SingleHoldEdit,
-	                                 SingleHiSpeedEdit, SingleTempoEdit, SingleTimeSignatureEdit,
-	                                 SingleSkillEdit, SingleWaypointEdit, FeverEdit, ScoreEdit>;
+	using HistoryEdit =
+	    std::variant<MetadataEdit, SingleNoteEdit, SingleHoldEdit, SingleHiSpeedEdit,
+	                 SingleTempoEdit, SingleTimeSignatureEdit, SingleSkillEdit, SingleWaypointEdit,
+	                 FeverEdit, ScoreEdit, ScoreExtensionEdit, LayerEdit>;
 
 	// Convert to HistoryEdit, collapse to Single*Edit variance when possible
 	HistoryEdit toHistoryEdit(ScoreEdit&& edit);
@@ -186,9 +206,17 @@ namespace MikuMikuWorld
 	{
 	  public:
 		void captureNote(const NotesContext& context, id_t noteID);
-		// Captures the hold and all of its steps
-		void captureHold(const NotesContext& context, id_t holdID);
+		// Captures the hold and, with steps, all of its steps
+		void captureHold(const NotesContext& context, id_t holdID, bool steps = true);
 		void captureHiSpeed(const Score& score, const layered_tick_t& key);
+		// Captures the notes and holds created by an edit, IDs are never reused
+		void captureCreated(const Score& score, id_t beforeNoteID, id_t afterNoteID,
+		                    id_t beforeHoldID, id_t afterHoldID);
+		// Adds everything captured by other that is not captured here
+		void merge(const ScoreCapture& other);
+		// Captures the current state of exactly the objects that are captured here.
+		// Objects that no longer exist are not captured
+		ScoreCapture recapture(const Score& score) const;
 
 		void clear();
 		void clearNotes();
@@ -208,6 +236,19 @@ namespace MikuMikuWorld
 		NoteCollection notes;
 		HoldNoteCollection holdNotes;
 		std::map<layered_tick_t, HiSpeed> hispeeds;
+	};
+
+	// What a layer edit may change: the layers and the layer of every note
+	class LayerCapture
+	{
+	  public:
+		explicit LayerCapture(const Score& score);
+		// The edit from the captured state to the current score
+		LayerEdit diff(const Score& score) const;
+
+	  private:
+		LayerCollection layers;
+		std::unordered_map<id_t, id_t> noteLayers;
 	};
 
 	void undoEdit(const HistoryEdit& edit, HistoryContext& ctx);

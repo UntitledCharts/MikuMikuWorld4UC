@@ -236,8 +236,6 @@ namespace MikuMikuWorld
 		HistoryContext historyContext();
 		void undo();
 		void redo();
-		// Legacy: does not record history. TODO(history-migration): replace with typed overload
-		void pushHistory(std::string_view description);
 		// selectionChange: the selection to restore on undo/redo. nullptr clears the selection
 		void pushHistory(std::string_view description, HistoryEdit edit,
 		                 SelectionChange selectionChange = {});
@@ -247,6 +245,12 @@ namespace MikuMikuWorld
 		bool pushSelectionChanged(std::string_view description);
 		bool pushSelectionEdit(std::string_view description, ScoreCapture&& baseCapture,
 		                       SelectionRef&& selectionBefore);
+		// For edits that change more than what the selection captures
+		// (e.g. creating notes that aren't selected afterwards)
+		bool pushEdit(std::string_view description, ScoreCapture&& beforeCapture,
+		              ScoreCapture&& afterCapture, SelectionRef&& selectionBefore);
+		// Pushes the layer edit made since the capture
+		void pushLayersEdit(std::string_view description, LayerCapture&& before);
 		// Pushes an edit that does not change the selection.
 		// saveSelection restores the selection on undo/redo
 		void pushEdit(std::string_view description, HistoryEdit edit, bool saveSelection = true);
@@ -278,7 +282,7 @@ namespace MikuMikuWorld
 		void eraseWaypoint(id_t waypointID);
 		void insertSkill(tick_t tick);
 
-		void setLaneExtension(int value, bool update = true);
+		void setLaneExtension(int value);
 		void setScoreExtension(bool isExtended);
 
 		bool isLayerVisible(id_t layer) const;

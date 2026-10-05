@@ -554,6 +554,7 @@ namespace MikuMikuWorld
 	{
 		shouldOpenEventEditor = true;
 		eventEditArgs = args;
+		eventEditHistoryCursor = context.history.undoCount();
 	}
 
 	void ScoreEditorTimeline::drawTimeline(ImDrawList* drawList)
@@ -3252,8 +3253,26 @@ namespace MikuMikuWorld
 		ImGui::SetNextWindowSize({ 280, -1 }, ImGuiCond_Always);
 		if (ImGui::BeginPopup("edit_event"))
 		{
+			bool syncEdit = false, forceClose = false;
+			// undo/redo may have changed the value the event editing
+			if (eventEditHistoryCursor != context.history.undoCount())
+			{
+				eventEditHistoryCursor = context.history.undoCount();
+				syncEdit = true;
+			}
 			if (Tempo* tempo = std::get_if<Tempo>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					auto it = context.score.tempoChanges.find(tempo->tick);
+					if (it == context.score.tempoChanges.end())
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					*tempo = it->second;
+				}
 				ImGui::TextUnformatted(localize(Text::editBpm));
 				ImGui::Separator();
 				UI::beginPropertyTable();
@@ -3293,6 +3312,17 @@ namespace MikuMikuWorld
 			}
 			else if (TimeSignature* timeSig = std::get_if<TimeSignature>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					auto it = context.score.timeSignatures.find(timeSig->measure);
+					if (it == context.score.timeSignatures.end())
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					*timeSig = it->second;
+				}
 				ImGui::TextUnformatted(localize(Text::editTimeSignature));
 				ImGui::Separator();
 				UI::beginPropertyTable();
@@ -3338,6 +3368,25 @@ namespace MikuMikuWorld
 			}
 			else if (HiSpeed* hispeed = std::get_if<HiSpeed>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					if (!isArrayIndexInBounds(hispeed->layer, context.score.layers))
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					const HiSpeedCollection& collection =
+					    context.score.layers[hispeed->layer].hiSpeedChanges;
+					auto it = collection.find(hispeed->tick);
+					if (it == collection.end())
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					*hispeed = it->second;
+				}
 				ImGui::TextUnformatted(localize(Text::editHiSpeed));
 				ImGui::Separator();
 				bool eventEdited = false;
@@ -3410,6 +3459,17 @@ namespace MikuMikuWorld
 			}
 			else if (Waypoint* waypoint = std::get_if<Waypoint>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					auto it = context.score.waypoints.find(waypoint->ID);
+					if (it == context.score.waypoints.end())
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					*waypoint = it->second;
+				}
 				if (ImGui::IsWindowAppearing() && !mouseInTimeline)
 				{
 					secs_t time = accumulateDuration(waypoint->tick, context.score.tempoChanges);
@@ -3439,7 +3499,8 @@ namespace MikuMikuWorld
 					const Waypoint before = wp;
 					wp.name = waypoint->name;
 					if (before.name != wp.name)
-						context.pushEdit("Change waypoint", SingleWaypointEdit{ wp.ID, before, wp });
+						context.pushEdit("Change waypoint",
+						                 SingleWaypointEdit{ wp.ID, before, wp });
 				}
 				UI::endPropertyTable();
 
@@ -3452,6 +3513,17 @@ namespace MikuMikuWorld
 			}
 			else if (Fever* fever = std::get_if<Fever>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					*fever = context.score.fever;
+					// The fever event was removed
+					if (fever->startTick == -1 && fever->endTick == -1)
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+				}
 				ImGui::TextUnformatted(localize(Text::editFever));
 				ImGui::Separator();
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
@@ -3466,6 +3538,17 @@ namespace MikuMikuWorld
 			}
 			else if (Skill* skill = std::get_if<Skill>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					auto it = context.score.skills.find(*skill);
+					if (it == context.score.skills.end())
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					*skill = *it;
+				}
 				ImGui::TextUnformatted(localize(Text::editSkill));
 				ImGui::Separator();
 				if (context.metadata.isExtendedScore)

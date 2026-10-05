@@ -471,10 +471,9 @@ namespace MikuMikuWorld
 			}
 			if (context.metadata.isExtendedScore)
 			{
-				UI::intPropertyRow(Text::laneExtension, context.workingMetadata.laneExtension, "%d",
-				                   0, 10000);
-				if (ImGui::IsItemDeactivatedAfterEdit())
-					context.setLaneExtension(context.workingMetadata.laneExtension);
+				// Not recorded by history
+				UI::intPropertyRow(Text::laneExtension, context.metadata.laneExtension, "%d", 0,
+				                   10000);
 				UI::intPropertyRow(Text::lifePoint, context.workingMetadata.baseLifePoint, "%d", 10,
 				                   1000000);
 				if (ImGui::IsItemDeactivatedAfterEdit())
@@ -2299,6 +2298,7 @@ namespace MikuMikuWorld
 			if (editIndex >= 0)
 			{
 				bool edited = false;
+				LayerCapture before(context.score);
 				Layer& layer = context.score.layers[editIndex];
 				edited = layer.name != editLayerName ||
 				         (isWithinRange(layer.forceNoteSpeed, 1, 12) != editForceNoteSpeed) ||
@@ -2307,14 +2307,15 @@ namespace MikuMikuWorld
 				layer.forceNoteSpeed = editForceNoteSpeed ? editNoteSpeed : 0.0f;
 				editIndex = -1;
 				if (edited)
-					context.pushHistory("Layer edit");
+					context.pushLayersEdit("Layer edit", std::move(before));
 			}
 			else
 			{
+				LayerCapture before(context.score);
 				id_t layerId = static_cast<int>(context.score.layers.size());
 				float noteSpeed = editForceNoteSpeed ? editNoteSpeed : 0.0f;
 				context.score.layers.push_back(Layer{ layerId, editLayerName, noteSpeed });
-				context.pushHistory(localize(Text::createLayer));
+				context.pushLayersEdit(localize(Text::createLayer), std::move(before));
 			}
 		}
 	}
@@ -2396,6 +2397,7 @@ namespace MikuMikuWorld
 
 	void LayersWindow::doLayerMerge(ScoreContext& context, id_t index)
 	{
+		LayerCapture before(context.score);
 		for (auto& [_, note] : context.score.notes)
 		{
 			if (note.layer >= index)
@@ -2412,20 +2414,23 @@ namespace MikuMikuWorld
 		if (context.selectedLayer >= index)
 			context.selectedLayer -= 1;
 		context.score.layers.erase(context.score.layers.begin() + index);
-		context.pushHistory(localize(Text::layerMerge));
+		context.pushLayersEdit(localize(Text::layerMerge), std::move(before));
 	}
 
 	void LayersWindow::doLayerHidden(ScoreContext& context, id_t index)
 	{
+		LayerCapture before(context.score);
 		auto& layer = context.score.layers.at(index);
 		layer.hidden = !layer.hidden;
-		context.pushHistory(localize(layer.hidden ? Text::layerHide : Text::layerShow));
+		context.pushLayersEdit(localize(layer.hidden ? Text::layerHide : Text::layerShow),
+		                       std::move(before));
 	}
 
 	void LayersWindow::doLayerMove(ScoreContext& context, id_t index, id_t offset)
 	{
 		if (offset == 0)
 			return;
+		LayerCapture before(context.score);
 		LayerCollection& layers = context.score.layers;
 		if (offset > 0)
 		{
@@ -2464,13 +2469,14 @@ namespace MikuMikuWorld
 		}
 		if (index == context.selectedLayer)
 			context.selectedLayer += offset;
-		context.pushHistory(localize(Text::layerChangeOrder));
+		context.pushLayersEdit(localize(Text::layerChangeOrder), std::move(before));
 	}
 
 	void LayersWindow::doLayerSwap(ScoreContext& context, id_t index, id_t newIndex)
 	{
 		if (index == newIndex)
 			return;
+		LayerCapture before(context.score);
 		for (auto& [_, note] : context.score.notes)
 		{
 			if (note.layer == index)
@@ -2487,7 +2493,7 @@ namespace MikuMikuWorld
 			context.selectedLayer = newIndex;
 		else if (newIndex == context.selectedLayer)
 			context.selectedLayer = index;
-		context.pushHistory(localize(Text::layerChangeOrder));
+		context.pushLayersEdit(localize(Text::layerChangeOrder), std::move(before));
 	}
 
 	const char* WaypointsWindow::getWindowName()
