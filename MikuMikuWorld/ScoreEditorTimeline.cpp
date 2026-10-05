@@ -2126,8 +2126,27 @@ namespace MikuMikuWorld
 		const TimeSignature& ts = getTimeSignAt(context.score, currentMeasure);
 		const Tempo& tempo = getTempoAt(context.score, currentTick);
 		float bpm = tempo.quarterPerMinute / quatersPerMeasure(ts) * beatsPerMeasure(ts);
-		const HiSpeed* hiSpeedPtr = getHiSpeedAt(context.score, currentTick, context.selectedLayer);
-		float speed = hiSpeedPtr ? hiSpeedPtr->speed : 1.0f;
+		float speed = 1.0f;
+		auto& currentHispeedChanges = context.score.layers[context.selectedLayer].hiSpeedChanges;
+		auto speedIt = currentHispeedChanges.upper_bound(currentTick);
+		if (speedIt != currentHispeedChanges.begin())
+		{
+			const HiSpeed& hiSpeed = std::prev(speedIt)->second;
+			switch (hiSpeed.ease)
+			{
+			default:
+			case HiSpeedEaseType::None:
+				speed = hiSpeed.speed;
+				break;
+			case HiSpeedEaseType::Linear:
+				if (speedIt != currentHispeedChanges.end())
+				{
+					const HiSpeed& nxHiSpeed = speedIt->second;
+					speed = lerp(hiSpeed.speed, nxHiSpeed.speed,
+					             unlerp(hiSpeed.tick, nxHiSpeed.tick, currentTick));
+				}
+			}
+		}
 
 		float time, ms = std::modf(curTime, &time) * 100;
 		div_t timeDiv = std::div(int(time), 60);
