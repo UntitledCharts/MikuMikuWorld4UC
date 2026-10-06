@@ -153,7 +153,7 @@ namespace MikuMikuWorld
 	void PresetManager::createPreset(const ScoreContext& context, const std::string& name,
 	                                 const std::string& desc)
 	{
-		if (!context.hasAnySelected() || name.empty())
+		if (context.selection.empty() || name.empty())
 			return;
 
 		int ID = nextPresetID++;
@@ -163,8 +163,8 @@ namespace MikuMikuWorld
 		preset.description = desc;
 
 		tick_t baseTick = context.getMinTickFromSelection();
-		selected_score_to_json(preset.data, context.score, context.selectedNotes,
-		                       context.selectedHiSpeedChanges, baseTick, context.selectedLayer);
+		selected_score_to_json(preset.data, context.score, context.selection, baseTick,
+		                       context.selectedLayer);
 	}
 
 	void PresetManager::removePreset(int id)

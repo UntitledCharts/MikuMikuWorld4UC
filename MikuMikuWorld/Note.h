@@ -91,6 +91,7 @@ namespace MikuMikuWorld
 
 	using NoteCollection = std::unordered_map<id_t, Note>;
 	using NoteOrderedCollection = std::multimap<tick_t, Note*>;
+	using NoteRefCollection = std::unordered_set<id_t>;
 	using NoteViewCollection = std::unordered_map<id_t, Note*>;
 	struct NotesContext; // Forward declaration
 
@@ -209,6 +210,10 @@ namespace MikuMikuWorld
 		NoteCollection notes;
 		HoldNoteCollection holdNotes;
 	};
+
+	// These are purely helpers. They compare the properties only and should not be used as identity comparators.
+	bool isSame(const Note& a, const Note& b);
+	bool isSame(const HoldNoteStep& a, const HoldNoteStep& b);
 
 	void setNotePosition(Note& n1, const Note& n2);
 	void swapNotePosition(Note& n1, Note& n2);

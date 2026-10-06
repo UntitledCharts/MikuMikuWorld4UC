@@ -659,10 +659,8 @@ namespace MikuMikuWorld
 		hispeed.hideNotes = tryGetValue(data, "hideNotes", false);
 	}
 
-	void selected_score_to_json(json& data, const Score& score,
-	                            const NoteViewCollection& selectedNotes,
-	                            const HiSpeedRefCollection& selectedHispeed, tick_t baseTick,
-	                            id_t currentLayer)
+	void selected_score_to_json(json& data, const Score& score, const ScoreSelection& selection,
+	                            tick_t baseTick, id_t currentLayer)
 	{
 		json& notes = data["notes"] = json::array();
 		json& damages = data["damages"] = json::array();
@@ -672,14 +670,17 @@ namespace MikuMikuWorld
 		data["origin"] = APP_NAME;
 		data["version"] = Application::getInstance().getAppVersion();
 
+		std::vector<const Note*> selectedNotes;
 		std::unordered_set<id_t> selectedHolds;
-		std::unordered_map<id_t, std::vector<Note*>> selectedSteps;
-		for (auto&& [_, pnote] : selectedNotes)
+		std::unordered_map<id_t, std::vector<const Note*>> selectedSteps;
+		for (auto&& noteID : selection.notes)
 		{
-			if (!pnote->isHold())
+			const Note& note = score.notes.at(noteID);
+			selectedNotes.push_back(&note);
+			if (!note.isHold())
 				continue;
-			selectedHolds.emplace(pnote->holdID);
-			selectedSteps[pnote->holdID].push_back(pnote);
+			selectedHolds.emplace(note.holdID);
+			selectedSteps[note.holdID].push_back(&note);
 		}
 		// Remove any holds that doesn't have at least 2 steps
 		for (auto it = selectedSteps.begin(); it != selectedSteps.end();)
@@ -693,7 +694,7 @@ namespace MikuMikuWorld
 				++it;
 		}
 
-		for (auto&& [_, pnote] : selectedNotes)
+		for (auto&& pnote : selectedNotes)
 		{
 			if (pnote->isHold() && selectedHolds.count(pnote->holdID))
 				continue;
@@ -740,7 +741,7 @@ namespace MikuMikuWorld
 			json* stepsArray = &((*holdData)["steps"] = json::array());
 			for (; stepIt != endIt; ++stepIt)
 			{
-				Note& step = **stepIt;
+				const Note& step = **stepIt;
 				if (nextHoldStepIt != hold.separators.end() && nextHoldStepIt->ID == step.ID)
 				{
 					++nextHoldStepIt;
@@ -763,7 +764,7 @@ namespace MikuMikuWorld
 				stepsArray = &((*holdData)["steps"] = json::array());
 				for (; stepIt != endIt; ++stepIt)
 				{
-					Note& step = **stepIt;
+					const Note& step = **stepIt;
 					if (nextHoldStepIt != hold.separators.end() && nextHoldStepIt->ID == step.ID)
 					{
 						++nextHoldStepIt;
@@ -777,11 +778,11 @@ namespace MikuMikuWorld
 			const Note& end = **stepIt;
 			terminal_step_note_to_json(holdEnd, end, *holdStep, -baseTick);
 		}
-		for (auto&& [layer, tick] : selectedHispeed)
+		for (auto&& [layer, tick] : selection.hispeeds)
 		{
 			// If 2 hispeeds at the same tick are selected,
 			// always prioritise the one in the current layer
-			if (layer != currentLayer && selectedHispeed.count({ currentLayer, tick }))
+			if (layer != currentLayer && selection.hispeeds.count({ currentLayer, tick }))
 				continue;
 			hispeed_to_json(hiSpeedChanges.emplace_back(),
 			                score.layers[layer].hiSpeedChanges.at(tick), -baseTick);

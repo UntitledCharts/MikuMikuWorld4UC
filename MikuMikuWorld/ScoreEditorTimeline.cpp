@@ -71,8 +71,14 @@ namespace MikuMikuWorld
 			if (loadMusicFuture.valid())
 				loadMusicFuture.get();
 			loadMusicFuture = std::async(std::launch::async, &ScoreEditorTimeline::loadMusic, this,
-			                             std::cref(context.pendingLoadMusicFilename));
+			                             context.workingMetadata.musicFile);
 			context.isPendingLoadMusic = false;
+		}
+
+		if (context.isMusicLoading->load() == false && context.isPendingChangeMusicOffset)
+		{
+			context.isPendingChangeMusicOffset = false;
+			context.audio->setMusicOffset(getCurrentTime(), context.workingMetadata.musicOffset);
 		}
 
 		ImVec2 absScreenSize = ImGui::GetContentRegionAvail();
@@ -206,6 +212,9 @@ namespace MikuMikuWorld
 			float x = toScreenPosX(note.lane), y = toScreenPosY(noteTime) - noteHeight / 2;
 			ImVec2 p1 = { x - PADDING, y };
 			ImVec2 p2 = { x + PADDING + toScreenWidth(note.width), y + noteHeight };
+			if (p1.x > maxScreenPos.x || p2.x < absScreenPos.x || p1.y > maxScreenPos.y ||
+			    p2.y < absScreenPos.y)
+				continue;
 
 			drawList->AddRectFilled(p1, p2, 0x20f4f4f4, 2.0f, ImDrawFlags_RoundCornersAll);
 			drawList->AddRect(p1, p2, 0xcccccccc, 2.0f, ImDrawFlags_RoundCornersAll, 2.0f);
@@ -222,7 +231,7 @@ namespace MikuMikuWorld
 			     it != end; ++it)
 			{
 				Note& note = **it;
-				bool isSelected = context.hasNoteSelected(note);
+				bool isSelected = context.selection.has(note);
 				if (isSelected && io.KeyAlt)
 				{
 					context.deselectNote(note);
@@ -291,8 +300,7 @@ namespace MikuMikuWorld
 			{
 				if (!io.KeyAlt && !io.KeyCtrl)
 				{
-					context.selectedNotes.clear();
-					context.selectedHiSpeedChanges.clear();
+					context.clearSelection();
 				}
 				secs_t mouseTime = toTimePos(absMousePos.y);
 				auto&& [startTime, endTime] = std::minmax(dragStartTime, mouseTime);
@@ -311,9 +319,9 @@ namespace MikuMikuWorld
 					if (startLane > note.lane + note.width || endLane < note.lane)
 						continue;
 					if (io.KeyAlt)
-						context.selectedNotes.erase(note.ID);
+						context.deselectNote(note, false);
 					else
-						context.selectedNotes.emplace(note.ID, &note);
+						context.selectNote(note, false);
 				}
 				extend = toTimeUnit(ImGui::GetFrameHeight());
 				startTick = accumulateTicks(startTime - extend, context.score.tempoChanges);
@@ -327,7 +335,7 @@ namespace MikuMikuWorld
 					for (auto hscIt = hispeedChanges.lower_bound(startTick),
 					          hscEnd = hispeedChanges.upper_bound(endTick);
 					     hscIt != hscEnd; ++hscIt)
-						context.selectedHiSpeedChanges.insert(
+						context.selection.hispeeds.insert(
 						    { hscIt->second.layer, hscIt->second.tick });
 				}
 				if (context.showAllLayers && startLane < toLanePos(maxScreenPos.x) &&
@@ -340,7 +348,7 @@ namespace MikuMikuWorld
 						for (auto hscIt = layer.hiSpeedChanges.lower_bound(startTick),
 						          hscEnd = layer.hiSpeedChanges.upper_bound(endTick);
 						     hscIt != hscEnd; ++hscIt)
-							context.selectedHiSpeedChanges.insert(
+							context.selection.hispeeds.insert(
 							    { hscIt->second.layer, hscIt->second.tick });
 					}
 				}
@@ -373,6 +381,7 @@ namespace MikuMikuWorld
 		if (isDragSelecting && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 		{
 			isDragSelecting = false;
+			context.updateSelectionView();
 			context.updateSelectionFlag();
 		}
 
@@ -548,6 +557,7 @@ namespace MikuMikuWorld
 	{
 		shouldOpenEventEditor = true;
 		eventEditArgs = args;
+		eventEditHistoryCursor = context.history.undoCount();
 	}
 
 	void ScoreEditorTimeline::drawTimeline(ImDrawList* drawList)
@@ -682,6 +692,8 @@ namespace MikuMikuWorld
 			int beat = beat_t(tickDiff / ticksPerBeats) + measureBeat;
 
 			bool resetSpacing = false;
+			bool isMeasureLine = tickDiff % ticksPerMeasure == 0 && measure % measureStep == 0;
+			bool isBeatLine = beat % beatStep == 0;
 			if (tick >= ticksPerMeasure)
 			{
 				measure_t offsetMeasure = tickDiff / ticksPerMeasure;
@@ -699,8 +711,6 @@ namespace MikuMikuWorld
 				}
 			}
 
-			bool isMeasureLine = tickDiff % ticksPerMeasure == 0 && measure % measureStep == 0;
-			bool isBeatLine = beat % beatStep == 0;
 			if (isMeasureLine || isBeatLine)
 			{
 				secs_t time = accumulateDuration(tick, context.score.tempoChanges);
@@ -751,6 +761,7 @@ namespace MikuMikuWorld
 			{
 				quarterPerMinute = nextTempo->second.quarterPerMinute;
 				resetSpacing = true;
+				++nextTempo;
 			}
 
 			if (resetSpacing)
@@ -761,7 +772,6 @@ namespace MikuMikuWorld
 				spacing = quartersToSecs(ticksToQuarters(ticksPerMeasure), quarterPerMinute);
 				if (spacingMin > spacing)
 					measureStep = roundUpToPowerOfTwo(std::round(spacingMin / spacing));
-				++nextTempo;
 			}
 		}
 		ImGui::PopFont();
@@ -1334,18 +1344,8 @@ namespace MikuMikuWorld
 		if (ImGui::IsItemDeactivated())
 		{
 			grabbingNote = -1;
-			const Score& score = context.history.peekCurrent().score;
-			for (auto&& [ID, pnote] : context.selectedNotes)
-			{
-				const Note& oldNote = score.notes.at(ID);
-				if (pnote->lane != oldNote.lane || pnote->width != oldNote.width ||
-				    pnote->tick != oldNote.tick)
-				{
-					context.pushHistory("Note update");
-					context.updateSelectionFlag();
-					break;
-				}
-			}
+			if (context.pushSelectionChanged("Note update"))
+				context.updateSelectionFlag();
 		}
 	}
 
@@ -1613,7 +1613,7 @@ namespace MikuMikuWorld
 					else
 						context.deselectNote(note);
 				}
-				if (context.hasNoteSelected(note))
+				if (context.selection.has(note))
 					popupDrawList->AddRect(cursor, cursor + size, 0xcccccccc, 2.0f,
 					                       ImDrawFlags_RoundCornersAll, 2.0f);
 				drawNote(popupDrawList, dummy, noteTint, DrawChannel(0), context.score);
@@ -1871,16 +1871,16 @@ namespace MikuMikuWorld
 		if (ImGui::BeginPopupContextWindow(ImGui::GetCurrentWindowRead()->Name))
 		{
 			if (ImGui::MenuItem(localize(Text::del), ToShortcutString(input.deleteSelection), false,
-			                    context.hasAnySelected()))
+			                    !context.selection.empty()))
 				context.deleteSelection();
 
 			ImGui::Separator();
 			if (ImGui::MenuItem(localize(Text::cut), ToShortcutString(input.cutSelection), false,
-			                    context.hasAnySelected()))
+			                    !context.selection.empty()))
 				context.cutSelection();
 
 			if (ImGui::MenuItem(localize(Text::copy), ToShortcutString(input.copySelection), false,
-			                    context.hasAnySelected()))
+			                    !context.selection.empty()))
 				context.copySelection();
 
 			if (ImGui::MenuItem(localize(Text::paste), ToShortcutString(input.paste)))
@@ -1893,7 +1893,7 @@ namespace MikuMikuWorld
 			}
 
 			if (ImGui::MenuItem(localize(Text::duplicate), ToShortcutString(input.duplicate), false,
-			                    context.hasAnySelected()))
+			                    !context.selection.empty()))
 			{
 				context.copySelection();
 				pasteData.startPaste();
@@ -1901,7 +1901,7 @@ namespace MikuMikuWorld
 
 			if (ImGui::MenuItem(localize(Text::flipDuplicate),
 			                    ToShortcutString(input.flipDuplicate), false,
-			                    context.hasAnySelected()))
+			                    !context.selection.empty()))
 			{
 				context.copySelection();
 				pasteData.startPaste();
@@ -1909,7 +1909,7 @@ namespace MikuMikuWorld
 			}
 
 			if (ImGui::MenuItem(localize(Text::flip), ToShortcutString(input.flip), false,
-			                    context.hasAnyNoteSelected()))
+			                    !context.selection.emptyNotes()))
 				context.flipSelection();
 
 			ImGui::Separator();
@@ -1958,7 +1958,7 @@ namespace MikuMikuWorld
 			}
 
 			if (context.metadata.isExtendedScore &&
-			    ImGui::BeginMenu(localize(Text::layer), context.hasAnySelected()))
+			    ImGui::BeginMenu(localize(Text::layer), !context.selection.empty()))
 			{
 				for (size_t i = 0; i < context.score.layers.size(); ++i)
 					if (ImGui::MenuItem(context.score.layers[i].name.c_str()))
@@ -1975,7 +1975,7 @@ namespace MikuMikuWorld
 
 			ImGui::Separator();
 			bool canShrink =
-			    (context.selectedNotes.size() + context.selectedHiSpeedChanges.size()) >= 2;
+			    (context.selectedNotes.size() + context.selection.hispeeds.size()) >= 2;
 			if (ImGui::MenuItem(localize(Text::shrinkUp), NULL, false, canShrink))
 				context.shrinkSelection(-1);
 
@@ -2040,7 +2040,7 @@ namespace MikuMikuWorld
 			}
 			ImGui::Separator();
 
-			if (UI::selectMenuItems(Text::lerpHispeeds, context.selectedHiSpeedChanges.size() >= 2,
+			if (UI::selectMenuItems(Text::lerpHispeeds, context.selection.hispeeds.size() >= 2,
 			                        easeTypeTexts, ease))
 				context.lerpHiSpeeds(quarterDivision, ease);
 
@@ -2129,8 +2129,27 @@ namespace MikuMikuWorld
 		const TimeSignature& ts = getTimeSignAt(context.score, currentMeasure);
 		const Tempo& tempo = getTempoAt(context.score, currentTick);
 		float bpm = tempo.quarterPerMinute / quatersPerMeasure(ts) * beatsPerMeasure(ts);
-		const HiSpeed* hiSpeedPtr = getHiSpeedAt(context.score, currentTick, context.selectedLayer);
-		float speed = hiSpeedPtr ? hiSpeedPtr->speed : 1.0f;
+		float speed = 1.0f;
+		auto& currentHispeedChanges = context.score.layers[context.selectedLayer].hiSpeedChanges;
+		auto speedIt = currentHispeedChanges.upper_bound(currentTick);
+		if (speedIt != currentHispeedChanges.begin())
+		{
+			const HiSpeed& hiSpeed = std::prev(speedIt)->second;
+			switch (hiSpeed.ease)
+			{
+			default:
+			case HiSpeedEaseType::None:
+				speed = hiSpeed.speed;
+				break;
+			case HiSpeedEaseType::Linear:
+				if (speedIt != currentHispeedChanges.end())
+				{
+					const HiSpeed& nxHiSpeed = speedIt->second;
+					speed = lerp(hiSpeed.speed, nxHiSpeed.speed,
+					             unlerp(hiSpeed.tick, nxHiSpeed.tick, currentTick));
+				}
+			}
+		}
 
 		float time, ms = std::modf(curTime, &time) * 100;
 		div_t timeDiv = std::div(int(time), 60);
@@ -2340,7 +2359,7 @@ namespace MikuMikuWorld
 			Note& note = *it->second;
 			if (!context.isLayerVisible(note.layer))
 				continue;
-			if (context.hasNoteSelected(note))
+			if (context.selection.has(note))
 				// Selected notes are *highlighted* so they are rendered later
 				continue;
 			updateNote(note, edit);
@@ -2499,7 +2518,7 @@ namespace MikuMikuWorld
 		// Per note options here
 		if (ImGui::IsItemDeactivated())
 		{
-			if (!isMovingNote && context.hasAnyNoteSelected())
+			if (!isMovingNote && !context.selection.emptyNotes())
 			{
 				const bool set = ImGui::GetIO().KeyShift;
 				const int setBoolean = set ? true : UNDEFINED;
@@ -2725,20 +2744,16 @@ namespace MikuMikuWorld
 			case InsertMode::MakeDummy:
 			case InsertMode::InsertDamage:
 			{
-				Note* insNote = context.insertNote(
-				    previewNote, ImGui::GetIO().KeyShift ? -1 : findHoveringHoldNote());
-				if (insNote && insNote->holdID >= 0 &&
-				    (insNote->type == NoteType::Tick || insNote->isHidden()))
+				Note insNote = previewNote;
+				id_t holdID = ImGui::GetIO().KeyShift ? -1 : findHoveringHoldNote();
+				// Ticks and guide midpoints follow the critical state of the hold segment
+				if (holdID >= 0 && (insNote.canCrit() || insNote.isHidden()))
 				{
-					const HoldNote& hold = context.score.holdNotes.at(insNote->holdID);
-					insNote->flag =
-					    setFlag(insNote->flag, NoteFlag::Critical,
-					            hold.holdStepAt(*insNote, context.score.notes).isCrit());
+					const HoldNote& hold = context.score.holdNotes.at(holdID);
+					bool isCrit = hold.holdStepAt(insNote, context.score.notes).isCrit();
+					insNote.flag = setFlag(insNote.flag, NoteFlag::Critical, isCrit);
 				}
-				if (insNote && ImGui::GetIO().KeyCtrl)
-				{
-					context.selectNote(*insNote, true);
-				}
+				context.insertNote(insNote, holdID, true, ImGui::GetIO().KeyCtrl);
 			}
 
 			break;
@@ -2747,13 +2762,9 @@ namespace MikuMikuWorld
 			case InsertMode::InsertGuide:
 				if (isInsertingHold)
 				{
-					auto&& [_, n1, n2] = context.insertHold(noteStart, noteEnd, previewHold);
+					context.insertHold(noteStart, noteEnd, previewHold, true,
+					                   ImGui::GetIO().KeyCtrl);
 					isInsertingHold = false;
-					if (ImGui::GetIO().KeyCtrl)
-					{
-						context.selectNote(n1, false);
-						context.selectNote(n2);
-					}
 				}
 				else
 				{
@@ -2873,7 +2884,7 @@ namespace MikuMikuWorld
 				for (; hispdIt != hispdEnd; ++hispdIt)
 				{
 					const HiSpeed& hispeed = hispdIt->second;
-					hiSpeedControl(drawList, hispeed, context.hasHispeedSelected(hispeed), false);
+					hiSpeedControl(drawList, hispeed, context.selection.has(hispeed), false);
 				}
 			}
 			// Then render the selected layer
@@ -2891,14 +2902,13 @@ namespace MikuMikuWorld
 				if (hispdIt == hispdMouse)
 					continue;
 				const HiSpeed& hispeed = hispdIt->second;
-				if (hiSpeedControl(drawList, hispeed, context.hasHispeedSelected(hispeed),
-				                   eventEnabled))
+				if (hiSpeedControl(drawList, hispeed, context.selection.has(hispeed), eventEnabled))
 					openEvent(hispeed);
 			}
 
 			if (hispdMouse != hispeedChanges.rend() &&
 			    hiSpeedControl(drawList, hispdMouse->second,
-			                   context.hasHispeedSelected(hispdMouse->second), eventEnabled))
+			                   context.selection.has(hispdMouse->second), eventEnabled))
 			{
 				if (io.KeyCtrl)
 					context.selectHiSpeed(hispdMouse->second);
@@ -3265,8 +3275,26 @@ namespace MikuMikuWorld
 		ImGui::SetNextWindowSize({ 280, -1 }, ImGuiCond_Always);
 		if (ImGui::BeginPopup("edit_event"))
 		{
+			bool syncEdit = false, forceClose = false;
+			// undo/redo may have changed the value the event editing
+			if (eventEditHistoryCursor != context.history.undoCount())
+			{
+				eventEditHistoryCursor = context.history.undoCount();
+				syncEdit = true;
+			}
 			if (Tempo* tempo = std::get_if<Tempo>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					auto it = context.score.tempoChanges.find(tempo->tick);
+					if (it == context.score.tempoChanges.end())
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					*tempo = it->second;
+				}
 				ImGui::TextUnformatted(localize(Text::editBpm));
 				ImGui::Separator();
 				UI::beginPropertyTable();
@@ -3280,9 +3308,12 @@ namespace MikuMikuWorld
 						ImGui::EndPopup();
 						return;
 					}
+					const Tempo before = tempoIt->second;
 					tempo->quarterPerMinute = tempoIt->second.quarterPerMinute =
 					    std::clamp(tempo->quarterPerMinute, MIN_BPM, MAX_BPM);
-					context.pushHistory("Change tempo");
+					if (before.quarterPerMinute != tempoIt->second.quarterPerMinute)
+						context.pushEdit("Change tempo",
+						                 SingleTempoEdit{ tempo->tick, before, tempoIt->second });
 				}
 				UI::endPropertyTable();
 				ImGui::Separator();
@@ -3290,13 +3321,30 @@ namespace MikuMikuWorld
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
-					if (context.score.tempoChanges.erase(tempo->tick))
-						context.pushHistory("Remove tempo change");
+					auto tempoIt = context.score.tempoChanges.find(tempo->tick);
+					if (tempoIt != context.score.tempoChanges.end())
+					{
+						const Tempo before = tempoIt->second;
+						context.score.tempoChanges.erase(tempoIt);
+						context.pushEdit("Remove tempo change",
+						                 SingleTempoEdit{ tempo->tick, before, std::nullopt });
+					}
 				}
 				ImGui::EndDisabled();
 			}
 			else if (TimeSignature* timeSig = std::get_if<TimeSignature>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					auto it = context.score.timeSignatures.find(timeSig->measure);
+					if (it == context.score.timeSignatures.end())
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					*timeSig = it->second;
+				}
 				ImGui::TextUnformatted(localize(Text::editTimeSignature));
 				ImGui::Separator();
 				UI::beginPropertyTable();
@@ -3310,12 +3358,15 @@ namespace MikuMikuWorld
 						return;
 					}
 					TimeSignature& ts = tsIt->second;
+					const TimeSignature before = ts;
 					ts.numerator = std::clamp(timeSig->numerator, MIN_TIME_SIGNATURE,
 					                          MAX_TIME_SIGNATURE_NUMERATOR);
 					ts.denominator = std::clamp(timeSig->denominator, MIN_TIME_SIGNATURE,
 					                            MAX_TIME_SIGNATURE_DENOMINATOR);
 
-					context.pushHistory("Change time signature");
+					if (before.numerator != ts.numerator || before.denominator != ts.denominator)
+						context.pushEdit("Change time signature",
+						                 SingleTimeSignatureEdit{ timeSig->measure, before, ts });
 				}
 				UI::endPropertyTable();
 
@@ -3325,13 +3376,39 @@ namespace MikuMikuWorld
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
-					if (context.score.timeSignatures.erase(timeSig->measure))
-						context.pushHistory("Remove time signature");
+					auto tsIt = context.score.timeSignatures.find(timeSig->measure);
+					if (tsIt != context.score.timeSignatures.end())
+					{
+						const TimeSignature before = tsIt->second;
+						context.score.timeSignatures.erase(tsIt);
+						context.pushEdit(
+						    "Remove time signature",
+						    SingleTimeSignatureEdit{ timeSig->measure, before, std::nullopt });
+					}
 				}
 				ImGui::EndDisabled();
 			}
 			else if (HiSpeed* hispeed = std::get_if<HiSpeed>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					if (!isArrayIndexInBounds(hispeed->layer, context.score.layers))
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					const HiSpeedCollection& collection =
+					    context.score.layers[hispeed->layer].hiSpeedChanges;
+					auto it = collection.find(hispeed->tick);
+					if (it == collection.end())
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					*hispeed = it->second;
+				}
 				ImGui::TextUnformatted(localize(Text::editHiSpeed));
 				ImGui::Separator();
 				bool eventEdited = false;
@@ -3367,11 +3444,15 @@ namespace MikuMikuWorld
 						return;
 					}
 					auto& hspd = hispeedIt->second;
+					const HiSpeed before = hspd;
 					hspd.speed = std::clamp(hispeed->speed, -MAX_HISPEED, MAX_HISPEED);
 					hspd.skips = std::clamp(hispeed->skips, -MAX_HISPEED, MAX_HISPEED);
 					hspd.ease = hispeed->ease;
 					hspd.hideNotes = hispeed->hideNotes;
-					context.pushHistory("Change hi-speed");
+					if (!isSame(before, hspd))
+						context.pushEdit(
+						    "Change hi-speed",
+						    SingleHiSpeedEdit{ { hspd.layer, hspd.tick }, before, hspd });
 					context.updateSelectionFlag();
 				}
 				UI::endPropertyTable();
@@ -3380,15 +3461,37 @@ namespace MikuMikuWorld
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
-					if (context.score.layers[hispeed->layer].hiSpeedChanges.erase(hispeed->tick))
+					auto& hispeedChanges = context.score.layers[hispeed->layer].hiSpeedChanges;
+					auto hispeedIt = hispeedChanges.find(hispeed->tick);
+					if (hispeedIt != hispeedChanges.end())
 					{
-						context.pushHistory("Remove hi-speed change");
+						const HiSpeed before = hispeedIt->second;
+						// The selection loses the hi-speed. Undo selects it again
+						SelectionRef selectionBefore = context.getSelectionSnapshot();
+						context.deselectHiSpeed(before);
+						hispeedChanges.erase(hispeedIt);
+						context.pushEdit(
+						    "Remove hi-speed change",
+						    SingleHiSpeedEdit{ layered_tick_t{ before.layer, before.tick }, before,
+						                       std::nullopt },
+						    std::move(selectionBefore));
 						context.updateSelectionFlag();
 					}
 				}
 			}
 			else if (Waypoint* waypoint = std::get_if<Waypoint>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					auto it = context.score.waypoints.find(waypoint->ID);
+					if (it == context.score.waypoints.end())
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					*waypoint = it->second;
+				}
 				if (ImGui::IsWindowAppearing() && !mouseInTimeline)
 				{
 					secs_t time = accumulateDuration(waypoint->tick, context.score.tempoChanges);
@@ -3415,8 +3518,11 @@ namespace MikuMikuWorld
 						return;
 					}
 					auto&& [_, wp] = *it;
+					const Waypoint before = wp;
 					wp.name = waypoint->name;
-					context.pushHistory("Change waypoint");
+					if (before.name != wp.name)
+						context.pushEdit("Change waypoint",
+						                 SingleWaypointEdit{ wp.ID, before, wp });
 				}
 				UI::endPropertyTable();
 
@@ -3429,18 +3535,42 @@ namespace MikuMikuWorld
 			}
 			else if (Fever* fever = std::get_if<Fever>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					*fever = context.score.fever;
+					// The fever event was removed
+					if (fever->startTick == -1 && fever->endTick == -1)
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+				}
 				ImGui::TextUnformatted(localize(Text::editFever));
 				ImGui::Separator();
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
+					const Fever before = context.score.fever;
 					context.score.fever.startTick = -1;
 					context.score.fever.endTick = -1;
-					context.pushHistory("Remove FEVER event");
+					context.pushEdit("Remove FEVER event",
+					                 FeverEdit{ { before, context.score.fever } });
 				}
 			}
 			else if (Skill* skill = std::get_if<Skill>(&eventEditArgs))
 			{
+				if (syncEdit)
+				{
+					auto it = context.score.skills.find(*skill);
+					if (it == context.score.skills.end())
+					{
+						ImGui::CloseCurrentPopup();
+						ImGui::EndPopup();
+						return;
+					}
+					*skill = *it;
+				}
 				ImGui::TextUnformatted(localize(Text::editSkill));
 				ImGui::Separator();
 				if (context.metadata.isExtendedScore)
@@ -3463,18 +3593,28 @@ namespace MikuMikuWorld
 						if (!node.empty())
 						{
 							Skill& sk = node.value();
+							const Skill before = sk;
 							sk.effect = skill->effect;
 							sk.level = skill->level;
+							const Skill after = sk;
 							context.score.skills.insert(std::move(node));
-							context.pushHistory("Edit skill trigger");
+							if (before.effect != after.effect || before.level != after.level)
+								context.pushEdit("Edit skill trigger",
+								                 SingleSkillEdit{ after.tick, before, after });
 						}
 					}
 				}
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
-					context.score.skills.erase(*skill);
-					context.pushHistory("Remove skill trigger");
+					auto skillIt = context.score.skills.find(*skill);
+					if (skillIt != context.score.skills.end())
+					{
+						const Skill before = *skillIt;
+						context.score.skills.erase(skillIt);
+						context.pushEdit("Remove skill trigger",
+						                 SingleSkillEdit{ before.tick, before, std::nullopt });
+					}
 				}
 			}
 			else
@@ -3585,7 +3725,7 @@ namespace MikuMikuWorld
 		else
 		{
 			context.metadata.musicFile = filename;
-			context.audio->setMusicOffset(curTime, context.metadata.musicOffset);
+			context.isPendingChangeMusicOffset = true;
 		}
 
 		context.waveformL.generateMipChainsFromSampleBuffer(context.audio->musicBuffer, 0);
@@ -3598,10 +3738,10 @@ namespace MikuMikuWorld
 	{
 		context.deselectAll();
 		context.selectedLayer = 0;
-		context.history.clear(score, metadata);
+		context.history.clear();
 		context.recentHistoryUndo = context.history.undoCount();
 		context.score = std::move(score);
-		context.metadata = std::move(metadata);
+		context.metadata = context.workingMetadata = std::move(metadata);
 		context.upToDate = true;
 		context.updateViews();
 		context.scoreStats.calculateStats(context.score);
@@ -3624,7 +3764,6 @@ namespace MikuMikuWorld
 		}
 
 		context.isPendingLoadMusic = true;
-		context.pendingLoadMusicFilename = context.metadata.musicFile;
 
 		tick_t maxTick =
 		    context.notesOrderedView.size() ? context.notesOrderedView.rbegin()->second->tick : 0;

@@ -6,6 +6,7 @@
 #include "Math.h"
 #include "PlatformIO.h"
 #include "ScoreEditorTimeline.h"
+#include <cassert>
 #include <cstdio>
 
 using json = nlohmann::json;
@@ -139,7 +140,7 @@ namespace MikuMikuWorld
 
 	void ScoreContext::setStep(EditHoldStepType type)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 
 		bool edit = false;
@@ -214,16 +215,13 @@ namespace MikuMikuWorld
 			hold.updateLongs(score.notes);
 		}
 
-		if (edit)
-		{
-			pushHistory("Change step type");
+		if (pushSelectionChanged("Change step type") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setFlick(FlickType flick)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 
 		if (flick != FlickType::FlickTypeCount && flick >= maxFlick())
@@ -264,19 +262,15 @@ namespace MikuMikuWorld
 			}
 		}
 
-		if (edit)
-		{
-			pushHistory("Change flick");
+		if (pushSelectionChanged("Change flick") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setEase(EaseType ease)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 
-		Score prev = score;
 		if (ease != EaseType::EaseTypeCount && ease >= EaseType::EaseInOut &&
 		    !metadata.isExtendedScore)
 			return;
@@ -299,16 +293,13 @@ namespace MikuMikuWorld
 			}
 		}
 
-		if (edit)
-		{
-			pushHistory("Change ease");
+		if (pushSelectionChanged("Change ease") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setSoundEffect(SoundEffectType sound)
 	{
-		if (!hasAnyNoteSelected() || !metadata.isExtendedScore)
+		if (selection.emptyNotes() || !metadata.isExtendedScore)
 			return;
 
 		bool edit = false;
@@ -322,16 +313,13 @@ namespace MikuMikuWorld
 			note.soundEffect = sound;
 		}
 
-		if (edit)
-		{
-			pushHistory("Change dummy note");
+		if (pushSelectionChanged("Change sound effect") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setFadeType(FadeType fade)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 
 		bool edit = false;
@@ -353,16 +341,13 @@ namespace MikuMikuWorld
 			}
 		}
 
-		if (edit)
-		{
-			pushHistory("Change fade");
+		if (pushSelectionChanged("Change fade") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setGuideColor(GuideColor color)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 
 		bool edit = false;
@@ -410,29 +395,25 @@ namespace MikuMikuWorld
 			hold.updateFading(score.notes);
 		}
 
-		if (edit)
-		{
-			pushHistory("Change guide");
+		if (pushSelectionChanged("Change guide") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setLayer(int layer)
 	{
-		if (!hasAnySelected())
+		if (selection.empty())
 			return;
 
-		bool edit = false;
-		for (auto&& [_, pnote] : selectedNotes)
-		{
-			Note& note = *pnote;
+		// The hi-speeds move to other keys, so the selection changes along with the edit
+		SelectionRef selectionBefore = getSelectionSnapshot();
+		ScoreCapture beforeCapture = selectionCapture;
 
-			edit = note.layer != layer;
-			note.layer = layer;
-		}
-		HiSpeedRefCollection newSelection;
-		for (auto it = selectedHiSpeedChanges.begin(), end = selectedHiSpeedChanges.end();
-		     it != end;)
+		for (auto&& [_, pnote] : selectedNotes)
+			pnote->layer = layer;
+
+		HiSpeedRefCollection deletingHiSpeed = std::move(selection.hispeeds);
+		clearHiSpeedSelection();
+		for (auto it = deletingHiSpeed.begin(), end = deletingHiSpeed.end(); it != end;)
 		{
 			auto&& [curLayer, tick] = *(it++);
 			HiSpeedCollection& curCollection = score.layers[curLayer].hiSpeedChanges;
@@ -444,20 +425,16 @@ namespace MikuMikuWorld
 				hispeed.layer = layer;
 				newCollection.insert(curCollection.extract(tick));
 			}
-			newSelection.insert(newSelection.end(), { hispeed.layer, hispeed.tick });
+			selectHiSpeed(hispeed);
 		}
-		selectedHiSpeedChanges = std::move(newSelection);
 
-		if (edit)
-		{
-			pushHistory("Change layer");
+		if (pushSelectionEdit("Change layer", std::move(beforeCapture), std::move(selectionBefore)))
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setCriticals(int critical)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 		bool (*setFunc)(bool) = critical < 0 ? flip : critical > 0 ? set : unset;
 
@@ -510,7 +487,7 @@ namespace MikuMikuWorld
 					// if the hold start is critical, every note in the hold must be critical
 					Note& start = score.notes.at(startID);
 					Note& end = score.notes.at(phold->steps.back());
-					bool endSelected = hasNoteSelected(end);
+					bool endSelected = selection.has(end);
 					bool endSpecial = end.isTrace() || end.isFlick();
 					bool isCrit = endSelected && endSpecial
 					                  ? hasFlag(start.flag, NoteFlag::Critical)
@@ -527,7 +504,7 @@ namespace MikuMikuWorld
 					if (flipEnd)
 						end.flag |= NoteFlag::Critical;
 				}
-				else if (hasNoteSelected(startID))
+				else if (selection.hasNoteID(startID))
 				{
 					Note& start = score.notes.at(startID);
 					bool isCrit = hasFlag(start.flag, NoteFlag::Critical);
@@ -541,16 +518,13 @@ namespace MikuMikuWorld
 			}
 		}
 
-		if (edit)
-		{
-			pushHistory("Change critical note");
+		if (pushSelectionChanged("Change critical note") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setCriticalHold(int critical)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 		bool (*setFunc)(bool) = critical < 0 ? flip : critical > 0 ? set : unset;
 
@@ -585,16 +559,13 @@ namespace MikuMikuWorld
 			}
 		}
 
-		if (edit)
-		{
-			pushHistory("Change critical hold");
+		if (pushSelectionChanged("Change critical hold") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setFriction(int friction)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 		bool (*setFunc)(bool) = friction < 0 ? flip : friction > 0 ? set : unset;
 
@@ -629,16 +600,13 @@ namespace MikuMikuWorld
 			edit |= oldState != newState;
 		}
 
-		if (edit)
-		{
-			pushHistory("Change trace notes");
+		if (pushSelectionChanged("Change trace notes") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setDummy(int dummy)
 	{
-		if (!hasAnyNoteSelected() || !metadata.isExtendedScore)
+		if (selection.emptyNotes() || !metadata.isExtendedScore)
 			return;
 		bool (*setFunc)(bool) = dummy < 0 ? flip : dummy > 0 ? set : unset;
 
@@ -655,16 +623,13 @@ namespace MikuMikuWorld
 			edit |= oldState != newState;
 		}
 
-		if (edit)
-		{
-			pushHistory("Change dummy note");
+		if (pushSelectionChanged("Change dummy note") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setDummyHold(int dummy)
 	{
-		if (!hasAnyNoteSelected() || !metadata.isExtendedScore)
+		if (selection.emptyNotes() || !metadata.isExtendedScore)
 			return;
 		bool (*setFunc)(bool) = dummy < 0 ? flip : dummy > 0 ? set : unset;
 
@@ -690,16 +655,13 @@ namespace MikuMikuWorld
 			edit |= oldState != newState;
 		}
 
-		if (edit)
-		{
-			pushHistory("Change dummy hold");
+		if (pushSelectionChanged("Change dummy hold") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setGuideAlpha(float alpha)
 	{
-		if (!hasAnyNoteSelected() || !metadata.isExtendedScore)
+		if (selection.emptyNotes() || !metadata.isExtendedScore)
 			return;
 
 		bool edit = false;
@@ -724,16 +686,13 @@ namespace MikuMikuWorld
 			hold.updateLongs(score.notes);
 		}
 
-		if (edit)
-		{
-			pushHistory("Change guide alpha");
+		if (pushSelectionChanged("Change guide alpha") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setHoldLayer(HoldStepLayer layer)
 	{
-		if (!hasAnyNoteSelected() || !metadata.isExtendedScore)
+		if (selection.emptyNotes() || !metadata.isExtendedScore)
 			return;
 
 		bool edit = false;
@@ -753,16 +712,13 @@ namespace MikuMikuWorld
 			step.layer = layer;
 		}
 
-		if (edit)
-		{
-			pushHistory("Change hold step layer");
+		if (pushSelectionChanged("Change hold step layer") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::setHoldSeparator(int separator)
 	{
-		if (!hasAnyNoteSelected() || !metadata.isExtendedScore)
+		if (selection.emptyNotes() || !metadata.isExtendedScore)
 			return;
 
 		bool (*setFunc)(bool) = separator < 0 ? flip : separator > 0 ? set : unset;
@@ -806,11 +762,8 @@ namespace MikuMikuWorld
 			hold.updateLongs(score.notes);
 		}
 
-		if (edit)
-		{
-			pushHistory("Set separator");
+		if (pushSelectionChanged("Set separator") || edit)
 			updateSelectionFlag();
-		}
 	}
 
 	void ScoreContext::updateSelectionFlag()
@@ -917,27 +870,6 @@ namespace MikuMikuWorld
 		selectedFlag = setFlag(selectedFlag, SelectionFlag::CanConnectHold, canConnectHold());
 	}
 
-	bool ScoreContext::hasAnySelected() const
-	{
-		return selectedNotes.size() || selectedHiSpeedChanges.size();
-	}
-
-	bool ScoreContext::hasAnyNoteSelected() const { return selectedNotes.size(); }
-
-	bool ScoreContext::hasAnyHispeedSelected() const { return selectedHiSpeedChanges.size(); }
-
-	bool ScoreContext::hasNoteSelected(id_t noteID) const { return selectedNotes.count(noteID); }
-
-	bool ScoreContext::hasNoteSelected(const Note& note) const
-	{
-		return selectedNotes.count(note.ID);
-	}
-
-	bool ScoreContext::hasHispeedSelected(const HiSpeed& hispeed) const
-	{
-		return selectedHiSpeedChanges.count({ hispeed.layer, hispeed.tick });
-	}
-
 	tick_t ScoreContext::getMinTickFromSelection() const
 	{
 		using note_view_t = NoteViewCollection::value_type;
@@ -952,71 +884,155 @@ namespace MikuMikuWorld
 			return score.layers[hs1.first].hiSpeedChanges.at(hs1.second).tick <
 			       score.layers[hs2.first].hiSpeedChanges.at(hs2.second).tick;
 		};
-		auto minHspdIt = std::min_element(selectedHiSpeedChanges.begin(),
-		                                  selectedHiSpeedChanges.end(), hispeedComp);
-		if (minHspdIt == selectedHiSpeedChanges.end())
+		auto minHspdIt =
+		    std::min_element(selection.hispeeds.begin(), selection.hispeeds.end(), hispeedComp);
+		if (minHspdIt == selection.hispeeds.end())
 			return minTick;
 		return std::min(score.layers[minHspdIt->first].hiSpeedChanges.at(minHspdIt->second).tick,
 		                minTick);
 	}
 
+	void ScoreContext::clearNoteSelection()
+	{
+		selection.clearNotes();
+		selectedNotes.clear();
+		selectionCapture.clearNotes();
+	}
+
+	void ScoreContext::clearHiSpeedSelection()
+	{
+		selection.clearHispeed();
+		selectionCapture.clearHispeeds();
+	}
+
+	void ScoreContext::clearSelection()
+	{
+		selection.clearAll();
+		selectedNotes.clear();
+		selectionCapture.clear();
+	}
+
+	void ScoreContext::updateSelectionCapture()
+	{
+		selectionCapture.clear();
+		for (const auto& [ID, pnote] : selectedNotes)
+		{
+			selectionCapture.captureNote(score, pnote->ID);
+			if (pnote->isHold())
+				selectionCapture.captureHold(score, pnote->holdID);
+		}
+		for (const auto& key : selection.hispeeds)
+			selectionCapture.captureHiSpeed(score, key);
+	}
+
+	void ScoreContext::assertNoteSelection()
+	{
+		// Assert that selection view still match the selection
+		assert(selection.notes.size() == selectedNotes.size());
+		// Quitely fix the invariant in the release build
+		if (selection.notes.size() != selectedNotes.size())
+			updateSelectionView();
+	}
+
 	void ScoreContext::selectNote(Note& note, bool update)
 	{
-		auto&& [_, emplaced] = selectedNotes.emplace(note.ID, &note);
-		if (emplaced && update)
+		auto&& [_, emplaced] = selection.notes.insert(note.ID);
+		if (!emplaced)
+			return;
+		// Update our views
+		selectedNotes.emplace(note.ID, &note);
+		selectionCapture.captureNote(score, note.ID);
+		if (note.isHold())
+			selectionCapture.captureHold(score, note.holdID);
+		if (update)
 			updateSelectionFlag();
 	}
 
 	void ScoreContext::selectHiSpeed(const HiSpeed& hispeed)
 	{
-		selectedHiSpeedChanges.insert({ hispeed.layer, hispeed.tick });
+		layered_tick_t key{ hispeed.layer, hispeed.tick };
+		if (selection.hispeeds.insert(key).second)
+			selectionCapture.captureHiSpeed(score, key);
 	}
 
-	void ScoreContext::deselectNote(const Note& note)
+	void ScoreContext::deselectNote(const Note& note, bool update)
 	{
+		selection.notes.erase(note.ID);
 		selectedNotes.erase(note.ID);
-		updateSelectionFlag();
+		if (update)
+			updateSelectionFlag();
 	}
 
 	void ScoreContext::deselectHiSpeed(const HiSpeed& hispeed)
 	{
-		selectedHiSpeedChanges.erase({ hispeed.layer, hispeed.tick });
+		selection.hispeeds.erase({ hispeed.layer, hispeed.tick });
 	}
 
 	void ScoreContext::selectAll(id_t layer)
 	{
-		selectedNotes.clear();
-		selectedHiSpeedChanges.clear();
+		clearSelection();
 
 		for (auto&& [ID, note] : score.notes)
 			if (layer == LAYER_ALL || note.layer == layer)
-				selectedNotes.emplace(ID, &note);
+				selectNote(note, false);
 
 		for (id_t l = 0; l < score.layers.size(); ++l)
 			if (layer == LAYER_ALL || l == layer)
 				for (auto&& [tick, hispeed] : score.layers[l].hiSpeedChanges)
-					selectedHiSpeedChanges.emplace_hint(selectedHiSpeedChanges.end(),
-					                                    layered_tick_t{ l, tick });
+					selectHiSpeed(hispeed);
 
 		updateSelectionFlag();
 	}
 
 	void ScoreContext::deselectAll()
 	{
-		selectedNotes.clear();
-		selectedHiSpeedChanges.clear();
+		clearSelection();
 		updateSelectionFlag();
+	}
+
+	void ScoreContext::updateSelectionView()
+	{
+		selectedNotes.clear();
+		selectedNotes.reserve(selection.notes.size());
+		for (auto it = selection.notes.begin(); it != selection.notes.end();)
+		{
+			auto noteIt = score.notes.find(*it);
+			if (noteIt == score.notes.end())
+			{
+				// Selected note no longer exists
+				it = selection.notes.erase(it);
+				continue;
+			}
+			selectedNotes.emplace(noteIt->first, &noteIt->second);
+			++it;
+		}
+		// Same for hi-speeds, e.g. after undoing the insertion of a selected one
+		for (auto it = selection.hispeeds.begin(); it != selection.hispeeds.end();)
+		{
+			const auto& [layer, tick] = *it;
+			if (layer < 0 || layer >= static_cast<id_t>(score.layers.size()) ||
+			    score.layers[layer].hiSpeedChanges.count(tick) == 0)
+				it = selection.hispeeds.erase(it);
+			else
+				++it;
+		}
+		updateSelectionCapture();
 	}
 
 	void ScoreContext::deleteSelection()
 	{
-		if (!hasAnySelected())
+		if (selection.empty())
 			return;
 
+		SelectionRef selectionBefore = getSelectionSnapshot();
+		ScoreCapture beforeCapture = std::move(selectionCapture), afterCapture;
 		std::unordered_set<id_t> updatingHolds;
-		NoteViewCollection deletingNotes = std::move(selectedNotes);
-		selectedNotes.clear();
-		for (auto&& [ID, _] : deletingNotes)
+		NoteRefCollection deletingNotes = std::move(selection.notes);
+		HiSpeedRefCollection deletingHiSpeed = std::move(selection.hispeeds);
+		clearSelection();
+		hoveringNotes.clear();
+
+		for (auto&& ID : deletingNotes)
 		{
 			auto noteIt = score.notes.find(ID);
 			if (noteIt == score.notes.end())
@@ -1068,20 +1084,21 @@ namespace MikuMikuWorld
 				continue;
 			HoldNote& hold = holdIt->second;
 			hold.sortSteps(score.notes, !metadata.isExtendedScore);
+			afterCapture.captureHold(score, ID);
 		}
-		for (auto& [layer, tick] : selectedHiSpeedChanges)
+		for (auto& [layer, tick] : deletingHiSpeed)
 		{
 			score.layers[layer].hiSpeedChanges.erase(tick);
 		}
 
-		deselectAll();
-		hoveringNotes.clear();
-		pushHistory("Delete notes");
+		updateSelectionFlag();
+		if (auto edit = beforeCapture.diffAll(afterCapture))
+			pushEdit("Delete notes", toHistoryEdit(std::move(*edit)), std::move(selectionBefore));
 	}
 
 	void ScoreContext::flipSelection()
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 
 		static_assert(int(FlickType::FlickTypeCount) == 7, "Make sure nothing broke here!");
@@ -1107,7 +1124,7 @@ namespace MikuMikuWorld
 			}
 		}
 
-		pushHistory("Flip notes");
+		pushSelectionChanged("Flip notes");
 	}
 
 	void ScoreContext::cutSelection()
@@ -1118,14 +1135,14 @@ namespace MikuMikuWorld
 
 	void ScoreContext::copySelection() const
 	{
-		if (!hasAnySelected())
+		if (selection.empty())
 			return;
 
 		json data;
 		try
 		{
-			selected_score_to_json(data, score, selectedNotes, selectedHiSpeedChanges,
-			                       getMinTickFromSelection(), selectedLayer);
+			selected_score_to_json(data, score, selection, getMinTickFromSelection(),
+			                       selectedLayer);
 		}
 		catch (const std::exception& ex)
 		{
@@ -1146,8 +1163,9 @@ namespace MikuMikuWorld
 
 	void ScoreContext::paste(PasteData& pasteData, float offsetLane, tick_t offsetTick, id_t holdID)
 	{
-		selectedNotes.clear();
-		selectedHiSpeedChanges.clear();
+		SelectionRef selectionBefore = getSelectionSnapshot();
+		clearSelection();
+		ScoreCapture beforeCapture;
 
 		bool simplePaste = pasteData.holdNotes.size() == 1 ||
 		                   pasteData.holdNotes.empty() && pasteData.notes.size();
@@ -1155,6 +1173,7 @@ namespace MikuMikuWorld
 		if (holdID >= 0 && simplePaste)
 		{
 			HoldNote& hold = score.holdNotes.at(holdID);
+			beforeCapture.captureHold(score, holdID);
 			for (const auto& [_, note] : pasteData.notes)
 			{
 				Note insNote = note;
@@ -1164,7 +1183,7 @@ namespace MikuMikuWorld
 					insNote.type = NoteType::Tick; // Force compatibility
 				Note* newNote = insertNote(insNote, holdID, false);
 				if (newNote)
-					selectedNotes.emplace(newNote->ID, newNote);
+					selectNote(*newNote, false);
 			}
 			hold.updateSeparators(score.notes);
 			hold.updateJoints(score.notes);
@@ -1183,7 +1202,7 @@ namespace MikuMikuWorld
 				insNote.tick += offsetTick;
 				Note* newNote = insertNote(insNote, -1, false);
 				if (newNote)
-					selectedNotes.emplace(newNote->ID, newNote);
+					selectNote(*newNote, false);
 			}
 
 			std::unordered_map<id_t, id_t> remappedID;
@@ -1199,8 +1218,8 @@ namespace MikuMikuWorld
 				end.lane += offsetLane;
 				end.tick += offsetTick;
 				auto&& [newHold, newStart, newEnd] = insertHold(start, end, hold, false);
-				selectedNotes.emplace(newStart.ID, &newStart);
-				selectedNotes.emplace(newEnd.ID, &newEnd);
+				selectNote(newStart, false);
+				selectNote(newEnd, false);
 				for (; stepIt != endIt; ++stepIt)
 				{
 					Note step = pasteData.notes.at(*stepIt);
@@ -1211,7 +1230,7 @@ namespace MikuMikuWorld
 					Note* newStep = insertNote(step, newHold.ID, false);
 					if (newStep)
 					{
-						selectedNotes.emplace(newStep->ID, newStep);
+						selectNote(*newStep, false);
 						remappedID[step.ID] = newStep->ID;
 					}
 				}
@@ -1237,6 +1256,7 @@ namespace MikuMikuWorld
 			{
 				HiSpeed newHispeed = hispeed;
 				newHispeed.tick += offsetTick;
+				beforeCapture.captureHiSpeed(score, { newHispeed.layer, newHispeed.tick });
 				const HiSpeed& inserted = insertHispeedChange(newHispeed, false);
 				// select newly pasted
 				selectHiSpeed(inserted);
@@ -1245,8 +1265,7 @@ namespace MikuMikuWorld
 
 		updateSelectionFlag();
 		pasteData.cancelPaste();
-		if (selectedNotes.size() || selectedHiSpeedChanges.size())
-			pushHistory("Paste notes");
+		pushSelectionEdit("Paste notes", std::move(beforeCapture), std::move(selectionBefore));
 	}
 
 	bool ScoreContext::canMoveNoteSelection(tick_t& ticks, int quarterDivision, float& lanes,
@@ -1405,7 +1424,7 @@ namespace MikuMikuWorld
 		}
 
 		if (update)
-			pushHistory("Move note");
+			pushSelectionChanged("Move note");
 	}
 
 	void ScoreContext::setPosNoteSelection(tick_t tick, float lane, bool update)
@@ -1452,7 +1471,7 @@ namespace MikuMikuWorld
 		}
 
 		if (update)
-			pushHistory("Set note postion");
+			pushSelectionChanged("Set note postion");
 	}
 
 	void PasteData::cancelPaste()
@@ -1548,13 +1567,18 @@ namespace MikuMikuWorld
 
 	void ScoreContext::shrinkSelection(tick_t spacing)
 	{
-		if ((selectedNotes.size() + selectedHiSpeedChanges.size()) < 2)
+		if ((selection.notes.size() + selection.hispeeds.size()) < 2)
 			return;
+		assertNoteSelection();
+
+		// The selected hi-speeds move to other keys
+		SelectionRef selectionBefore = getSelectionSnapshot();
+		ScoreCapture beforeCapture = selectionCapture;
 
 		std::unordered_set<id_t> updatingHold;
 		std::vector<NoteOrderedCollection::node_type> updatingNodes;
-		HiSpeedRefCollection updatingHispeed = std::move(selectedHiSpeedChanges);
-		selectedHiSpeedChanges.clear();
+		HiSpeedRefCollection updatingHispeed = std::move(selection.hispeeds);
+		selection.hispeeds.clear();
 		updatingNodes.reserve(selectedNotes.size());
 		for (auto&& [ID, pnote] : selectedNotes)
 		{
@@ -1596,7 +1620,7 @@ namespace MikuMikuWorld
 					node.key() = tick;
 					node.mapped().tick = tick;
 					hiSpeedChanges.insert(std::move(node));
-					selectedHiSpeedChanges.emplace(hspdIt->first, tick);
+					selection.hispeeds.emplace(hspdIt->first, tick);
 					++hspdIt;
 				}
 			}
@@ -1612,19 +1636,23 @@ namespace MikuMikuWorld
 		for (const auto& holdID : updatingHold)
 			score.holdNotes.at(holdID).sortSteps(score.notes, !metadata.isExtendedScore);
 
-		pushHistory("Shrink notes");
+		pushSelectionEdit("Shrink notes", std::move(beforeCapture), std::move(selectionBefore));
 	}
 
 	void ScoreContext::compressSelection()
 	{
 		if (selectedNotes.size() < 2)
 			return;
+		assertNoteSelection();
+
+		SelectionRef selectionBefore = getSelectionSnapshot();
+		ScoreCapture beforeCapture = selectionCapture;
 
 		std::unordered_map<id_t, Layer> updatingLayers;
 		std::unordered_set<id_t> updatingHold;
 		std::vector<NoteOrderedCollection::node_type> updatingNodes;
-		HiSpeedRefCollection updatingHispeed = std::move(selectedHiSpeedChanges);
-		selectedHiSpeedChanges.clear();
+		HiSpeedRefCollection updatingHispeed = std::move(selection.hispeeds);
+		selection.hispeeds.clear();
 		updatingNodes.reserve(selectedNotes.size());
 		for (auto&& [ID, pnote] : selectedNotes)
 		{
@@ -1679,13 +1707,15 @@ namespace MikuMikuWorld
 			}
 			if (compare >= 0)
 			{
+				// The hi-speed at the new tick is replaced if there is one
+				beforeCapture.captureHiSpeed(score, { hspdIt->first, tick });
 				auto& hiSpeedChanges = score.layers[hspdIt->first].hiSpeedChanges;
 				auto node = hiSpeedChanges.extract(hspdIt->second);
 				node.key() = tick;
 				node.mapped().tick = tick;
 				hiSpeedChanges.erase(node.key());
 				hiSpeedChanges.insert(std::move(node));
-				selectedHiSpeedChanges.emplace(hspdIt->first, tick);
+				selection.hispeeds.emplace(hspdIt->first, tick);
 				++hspdIt;
 			}
 			// Add Hi-Speed
@@ -1707,13 +1737,15 @@ namespace MikuMikuWorld
 					auto& hiSpeedChanges = score.layers[layerID].hiSpeedChanges;
 					float shrinkSpeed = (shrinkTick - prevTick) * currSpeed;
 					auto it = hiSpeedChanges.upper_bound(tick - 1);
+					// The hi-speed that gets added or changed here is selected afterwards
+					beforeCapture.captureHiSpeed(score, { layerID, tick - 1 });
 					if (it == hiSpeedChanges.begin() ||
 					    (std::prev(it)->second.speed != shrinkSpeed &&
 					     std::prev(it)->first != tick - 1))
 						hiSpeedChanges.emplace(tick - 1, HiSpeed{ tick - 1, layerID, shrinkSpeed });
 					else
 						std::prev(it)->second.speed = shrinkSpeed;
-					selectedHiSpeedChanges.emplace(layerID, tick - 1);
+					selection.hispeeds.emplace(layerID, tick - 1);
 				}
 			}
 			prevTick = shrinkTick;
@@ -1733,18 +1765,20 @@ namespace MikuMikuWorld
 
 			auto& hiSpeedChanges = score.layers[layerID].hiSpeedChanges;
 			auto it = hiSpeedChanges.upper_bound(tick);
+			beforeCapture.captureHiSpeed(score, { layerID, tick });
 			if (it == hiSpeedChanges.begin() ||
 			    (std::prev(it)->second.speed != endSpeed && std::prev(it)->first != tick))
 				hiSpeedChanges.emplace(tick, HiSpeed{ tick, layerID, endSpeed });
 			else
 				std::prev(it)->second.speed = endSpeed;
-			selectedHiSpeedChanges.emplace(layerID, tick);
+			selection.hispeeds.emplace(layerID, tick);
 		}
 
 		for (const auto& holdID : updatingHold)
 			score.holdNotes.at(holdID).sortSteps(score.notes, !metadata.isExtendedScore);
 
-		pushHistory("Compress selection");
+		pushSelectionEdit("Compress selection", std::move(beforeCapture),
+		                  std::move(selectionBefore));
 	}
 
 	void ScoreContext::connectHoldsInSelection()
@@ -1776,23 +1810,14 @@ namespace MikuMikuWorld
 			return;
 		const Note& note = *selectedNotes.begin()->second;
 		HoldNote& hold = score.holdNotes.at(note.holdID);
-		auto&& [oldID, newID] = splitHoldAt(
-		    hold, std::distance(hold.steps.begin(),
-		                        std::find(hold.steps.begin(), hold.steps.end(), note.ID)));
-		if (!metadata.isExtendedScore)
-		{
-			HoldNote& oldHold = score.holdNotes.at(oldID);
-			Note& oldNote = score.notes.at(oldHold.steps.back());
-			oldNote.flag = setFlag(oldNote.flag, NoteFlag::Attached | NoteFlag::NonAttached, false);
-			HoldNote& newHold = score.holdNotes.at(newID);
-			Note& newNote = score.notes.at(newHold.steps.front());
-			newNote.flag = setFlag(newNote.flag, NoteFlag::Attached | NoteFlag::NonAttached, false);
-		}
+
+		splitHoldAt(hold, std::distance(hold.steps.begin(),
+		                                std::find(hold.steps.begin(), hold.steps.end(), note.ID)));
 	}
 
 	void ScoreContext::convertHoldToTraces(int quarterDivision, bool deleteHold, bool update)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 
 		std::unordered_map<const HoldNoteStep*, id_t> updatingHoldSteps;
@@ -1808,7 +1833,11 @@ namespace MikuMikuWorld
 			updatingHoldSteps.emplace(&step, hold.ID);
 		}
 
-		selectedNotes.clear();
+		SelectionRef selectionBefore = getSelectionSnapshot();
+		ScoreCapture beforeCapture = selectionCapture;
+		const id_t beforeNoteID = nextNoteID, beforeHoldID = nextHoldID;
+
+		clearNoteSelection();
 		for (auto&& [pstep, holdID] : updatingHoldSteps)
 		{
 			HoldNote& hold = score.holdNotes.at(holdID);
@@ -1868,7 +1897,7 @@ namespace MikuMikuWorld
 
 				Note* inserted = insertNote(newNote, !deleteHold ? holdID : -1, false);
 				if (inserted)
-					selectedNotes.emplace(inserted->ID, inserted);
+					selectNote(*inserted, false);
 			}
 
 			hold.updateJoints(score.notes);
@@ -1903,25 +1932,32 @@ namespace MikuMikuWorld
 		if (updatingHoldSteps.size())
 		{
 			updateSelectionFlag();
-			pushHistory("Convert slides into traces");
+			updateSelectionCapture();
+			ScoreCapture afterCapture = beforeCapture.recapture(score);
+			afterCapture.merge(selectionCapture);
+			afterCapture.captureCreated(score, beforeNoteID, nextNoteID, beforeHoldID, nextHoldID);
+			pushEdit("Convert slides into traces", std::move(beforeCapture),
+			         std::move(afterCapture), std::move(selectionBefore));
 		}
 	}
 
 	void ScoreContext::lerpHiSpeeds(int quarterDivision, EaseType ease)
 	{
-		if (selectedHiSpeedChanges.size() < 2)
+		if (selection.hispeeds.size() < 2)
 			return;
 
+		SelectionRef selectionBefore = getSelectionSnapshot();
+		ScoreCapture beforeCapture = selectionCapture;
 		std::vector<layered_tick_t> insertedHispeed;
 		const tick_t tickPerDivision = TICKS_PER_QUARTER / quarterDivision;
 		const EaseFunction easeFunc = getEaseFunction(ease);
 		constexpr tick_t MIN_TICK = 0;
-		for (auto it = selectedHiSpeedChanges.begin(); it != selectedHiSpeedChanges.end();)
+		for (auto it = selection.hispeeds.begin(); it != selection.hispeeds.end();)
 		{
 			// Find the range of hispeeds in the same layer
 			auto&& [layer, _] = *it;
-			auto first = selectedHiSpeedChanges.lower_bound({ layer, MIN_TICK });
-			auto last = selectedHiSpeedChanges.upper_bound({ layer, MAX_TICK });
+			auto first = selection.hispeeds.lower_bound({ layer, MIN_TICK });
+			auto last = selection.hispeeds.upper_bound({ layer, MAX_TICK });
 			auto& hiSpeedChanges = score.layers[layer].hiSpeedChanges;
 
 			for (auto next = std::next(first); next != last; first = next++)
@@ -1934,6 +1970,7 @@ namespace MikuMikuWorld
 				{
 					float speed = easeFunc(hispeed.speed, nxtHispeed.speed,
 					                       unlerp(hispeed.tick, nxtHispeed.tick, tick));
+					beforeCapture.captureHiSpeed(score, { layer, tick });
 					auto insertIt = hiSpeedChanges.lower_bound(tick);
 					if (insertIt == hiSpeedChanges.end() || insertIt->second.tick != tick)
 						hiSpeedChanges.emplace_hint(insertIt, tick, HiSpeed{ tick, layer, speed });
@@ -1946,19 +1983,20 @@ namespace MikuMikuWorld
 			it = last;
 		}
 
-		selectedHiSpeedChanges.insert<std::vector<layered_tick_t>::iterator>(
-		    insertedHispeed.begin(), insertedHispeed.end());
+		selection.hispeeds.insert<std::vector<layered_tick_t>::iterator>(insertedHispeed.begin(),
+		                                                                 insertedHispeed.end());
 
 		if (insertedHispeed.size())
 		{
 			updateSelectionFlag();
-			pushHistory("Lerp hispeeds");
+			pushSelectionEdit("Lerp hispeeds", std::move(beforeCapture),
+			                  std::move(selectionBefore));
 		}
 	}
 
 	void ScoreContext::convertHoldToGuide(GuideColor color)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 
 		if (!metadata.isExtendedScore)
@@ -2000,16 +2038,13 @@ namespace MikuMikuWorld
 			hold.updateFading(score.notes);
 		}
 
-		if (edit)
-		{
+		if (pushSelectionChanged("Convert hold to guide") || edit)
 			updateSelectionFlag();
-			pushHistory("Convert hold to guide");
-		}
 	}
 
 	void ScoreContext::convertGuideToHold(bool critical)
 	{
-		if (!hasAnyNoteSelected())
+		if (selection.emptyNotes())
 			return;
 
 		bool edit = false;
@@ -2045,16 +2080,13 @@ namespace MikuMikuWorld
 			}
 		}
 
-		if (edit)
-		{
+		if (pushSelectionChanged("Convert guide to hold") || edit)
 			updateSelectionFlag();
-			pushHistory("Convert guide to hold");
-		}
 	}
 
 	void ScoreContext::convertHoldToNone()
 	{
-		if (!hasAnyNoteSelected() || !metadata.isExtendedScore)
+		if (selection.emptyNotes() || !metadata.isExtendedScore)
 			return;
 
 		std::unordered_map<const HoldNoteStep*, id_t> updatingHoldSteps;
@@ -2070,7 +2102,11 @@ namespace MikuMikuWorld
 			updatingHoldSteps.emplace(&step, hold.ID);
 		}
 
-		selectedNotes.clear();
+		SelectionRef selectionBefore = getSelectionSnapshot();
+		ScoreCapture beforeCapture = selectionCapture;
+		const id_t beforeNoteID = nextNoteID, beforeHoldID = nextHoldID;
+
+		clearNoteSelection();
 		for (auto&& [pstep, holdID] : updatingHoldSteps)
 		{
 			// Erase duplicate note cause by splitting
@@ -2145,7 +2181,12 @@ namespace MikuMikuWorld
 		if (updatingHoldSteps.size())
 		{
 			updateSelectionFlag();
-			pushHistory("Convert slides into none");
+			updateSelectionCapture();
+			ScoreCapture afterCapture = beforeCapture.recapture(score);
+			afterCapture.merge(selectionCapture);
+			afterCapture.captureCreated(score, beforeNoteID, nextNoteID, beforeHoldID, nextHoldID);
+			pushEdit("Convert slides into none", std::move(beforeCapture), std::move(afterCapture),
+			         std::move(selectionBefore));
 		}
 	}
 
@@ -2158,48 +2199,147 @@ namespace MikuMikuWorld
 		{
 			notesOrderedView.emplace(note.tick, &note);
 		}
+
+		waypointOrderedView.clear();
+		for (auto&& [ID, waypoint] : score.waypoints)
+		{
+			waypointOrderedView.emplace(waypoint.tick, &waypoint);
+		}
+	}
+
+	HistoryContext ScoreContext::historyContext()
+	{
+		return HistoryContext{ score, metadata, selection };
 	}
 
 	void ScoreContext::undo()
 	{
-		if (history.hasUndo())
-		{
-			auto&& entry = history.undo();
-			score = entry.score;
-			metadata = entry.metadata;
-			deselectAll();
-			selectedLayer = std::clamp<id_t>(selectedLayer, 0, score.layers.size() - 1);
-			upToDate = recentHistoryUndo == history.undoCount();
-			updateViews();
+		if (!history.hasUndo())
+			return;
 
-			scoreStats.calculateStats(score);
-		}
+		HistoryContext ctx = historyContext();
+		history.undo(ctx);
+		onHistoryApplied();
 	}
 
 	void ScoreContext::redo()
 	{
-		if (history.hasRedo())
-		{
-			auto&& entry = history.redo();
-			score = entry.score;
-			metadata = entry.metadata;
-			deselectAll();
-			selectedLayer = std::clamp<id_t>(selectedLayer, 0, score.layers.size() - 1);
-			upToDate = recentHistoryUndo == history.undoCount();
-			updateViews();
+		if (!history.hasRedo())
+			return;
 
-			scoreStats.calculateStats(score);
-		}
+		HistoryContext ctx = historyContext();
+		history.redo(ctx);
+		onHistoryApplied();
 	}
 
-	void ScoreContext::pushHistory(std::string_view description)
+	void ScoreContext::onHistoryPushed(bool invalidateCapture)
 	{
-		history.pushHistory(description, score, metadata);
 		scoreStats.calculateStats(score);
 		upToDate = false;
+		if (invalidateCapture)
+			updateSelectionCapture();
 	}
 
-	Note* ScoreContext::insertNote(const Note& note, id_t holdID, bool update)
+	// Rebuild everything derived from the persistent state after an undo/redo
+	void ScoreContext::onHistoryApplied()
+	{
+		isPendingLoadMusic |= workingMetadata.musicFile != metadata.musicFile;
+		isPendingChangeMusicOffset |= workingMetadata.musicOffset != metadata.musicOffset;
+
+		workingMetadata = metadata;
+		selectedLayer = std::clamp<id_t>(selectedLayer, 0, score.layers.size() - 1);
+		upToDate = recentHistoryUndo == history.undoCount();
+		updateViews();
+		updateSelectionView();
+		updateSelectionFlag();
+
+		scoreStats.calculateStats(score);
+	}
+
+	void ScoreContext::pushHistory(std::string_view description, HistoryEdit edit,
+	                               SelectionChange selectionChange)
+	{
+		history.pushHistory(
+		    History{ std::string(description), std::move(edit), std::move(selectionChange) });
+		onHistoryPushed();
+	}
+
+	SelectionRef ScoreContext::getSelectionSnapshot()
+	{
+		if (selection.empty())
+			return nullptr;
+		// Reuse the previous snapshot while the selection is unchanged, so a chain of edits on
+		// the same selection all share one object
+		if (!selectionSnapshot || !(*selectionSnapshot == selection))
+			selectionSnapshot = std::make_shared<const ScoreSelection>(selection);
+		return selectionSnapshot;
+	}
+
+	void ScoreContext::pushEdit(std::string_view description, HistoryEdit edit, bool saveSelection)
+	{
+		SelectionChange selectionChange;
+		if (saveSelection)
+		{
+			SelectionRef snapshot = getSelectionSnapshot();
+			// The edit does not change what is selected
+			selectionChange = SelectionChange{ snapshot, snapshot };
+		}
+		pushHistory(description, std::move(edit), std::move(selectionChange));
+	}
+
+	void ScoreContext::pushEdit(std::string_view description, HistoryEdit edit,
+	                            SelectionRef&& selectionBefore)
+	{
+		pushHistory(description, std::move(edit), { selectionBefore, getSelectionSnapshot() });
+	}
+
+	bool ScoreContext::pushSelectionChanged(std::string_view description)
+	{
+		auto edit = selectionCapture.diffChanges(score);
+		if (!edit)
+			return false;
+
+		pushEdit(description, toHistoryEdit(std::move(*edit)), true);
+		return true;
+	}
+
+	bool ScoreContext::pushSelectionEdit(std::string_view description, ScoreCapture&& baseCapture,
+	                                     SelectionRef&& selectionBefore)
+	{
+		// edit modified the state selectionCapture is stale
+		updateSelectionCapture();
+		auto edit = baseCapture.diffAll(selectionCapture);
+		if (!edit)
+			return false;
+
+		history.pushHistory(History{ std::string(description),
+		                             std::move(*edit),
+		                             { std::move(selectionBefore), getSelectionSnapshot() } });
+		onHistoryPushed(false); // Already validated before pushed
+		return true;
+	}
+
+	bool ScoreContext::pushEdit(std::string_view description, ScoreCapture&& beforeCapture,
+	                            ScoreCapture&& afterCapture, SelectionRef&& selectionBefore)
+	{
+		auto edit = beforeCapture.diffAll(afterCapture);
+		if (!edit)
+			return false;
+
+		history.pushHistory(History{ std::string(description),
+		                             toHistoryEdit(std::move(*edit)),
+		                             { std::move(selectionBefore), getSelectionSnapshot() } });
+		onHistoryPushed(false); // Already validated before pushed
+		return true;
+	}
+
+	void ScoreContext::pushLayersEdit(std::string_view description, LayerCapture&& before)
+	{
+		// Layers change index, the selected hi-speeds don't point to the same ones afterwards
+		pushEdit(description, before.diff(score), false);
+	}
+
+	Note* ScoreContext::insertNote(const Note& note, id_t holdID, bool update, bool select)
 	{
 		if (!metadata.isExtendedScore)
 		{
@@ -2219,6 +2359,16 @@ namespace MikuMikuWorld
 			default:
 				return nullptr;
 			}
+		}
+
+		ScoreCapture captureBefore;
+		SelectionRef selectionBefore;
+		const id_t beforeNoteID = nextNoteID;
+		if (update)
+		{
+			if (holdID >= 0)
+				captureBefore.captureHold(score, holdID);
+			selectionBefore = getSelectionSnapshot();
 		}
 
 		id_t nextID = nextNoteID++;
@@ -2254,7 +2404,18 @@ namespace MikuMikuWorld
 			newNote.flag = setFlag(newNote.flag, NoteFlag::Attached, false);
 
 		if (update)
-			pushHistory("Insert note");
+		{
+			if (select)
+				selectNote(newNote, true);
+
+			ScoreCapture captureAfter;
+			captureAfter.captureNote(score, newNote.ID);
+			if (holdID >= 0)
+				captureAfter.captureHold(score, holdID);
+			if (auto edit = captureBefore.diffAll(captureAfter))
+				pushEdit("Insert note", toHistoryEdit(std::move(*edit)),
+				         std::move(selectionBefore));
+		}
 		return &newNote;
 	}
 
@@ -2264,6 +2425,9 @@ namespace MikuMikuWorld
 		if (it == score.notes.end())
 			return;
 		id_t noteID = note.ID;
+
+		SingleNoteEdit edit{ noteID, note, std::nullopt };
+		SelectionRef selectionBefore = update ? getSelectionSnapshot() : nullptr;
 		for (auto&& [it, end] = notesOrderedView.equal_range(note.tick); it != end; ++it)
 		{
 			if (it->second != &note)
@@ -2272,15 +2436,23 @@ namespace MikuMikuWorld
 			break;
 		}
 		score.notes.erase(it);
-		if (selectedNotes.erase(noteID) && update)
-			updateSelectionFlag();
+		bool selectionChanged = selection.notes.erase(noteID);
+		selectedNotes.erase(noteID);
+
 		if (update)
-			pushHistory("Erase note");
+		{
+			if (selectionChanged)
+				updateSelectionFlag();
+			pushEdit("Erase note", edit, std::move(selectionBefore));
+		}
 	}
 
 	std::tuple<HoldNote&, Note&, Note&> ScoreContext::insertHold(const Note& start, const Note& end,
-	                                                             const HoldNote& hold, bool update)
+	                                                             const HoldNote& hold, bool update,
+	                                                             bool select)
 	{
+		SelectionRef selectionBefore = update ? getSelectionSnapshot() : nullptr;
+
 		id_t nextIDH = nextHoldID++;
 
 		id_t nextID = nextNoteID++;
@@ -2358,25 +2530,56 @@ namespace MikuMikuWorld
 			newHold.updateFading(score.notes);
 
 		if (update)
-			pushHistory("Insert hold note");
+		{
+			if (select)
+			{
+				selectNote(holdStart, false);
+				selectNote(holdEnd, true);
+			}
+
+			ScoreCapture beforeCapture;
+			ScoreCapture afterCapture;
+			afterCapture.captureHold(score, newHold.ID);
+			if (auto edit = beforeCapture.diffAll(afterCapture))
+				pushEdit("Insert hold note", toHistoryEdit(std::move(*edit)),
+				         std::move(selectionBefore));
+		}
 
 		return { newHold, holdStart, holdEnd };
 	}
 
 	void ScoreContext::eraseHold(HoldNote& hold, bool update)
 	{
+		ScoreCapture beforeCapture;
+		SelectionRef selectionBefore;
+		if (update)
+		{
+			beforeCapture.captureHold(score, hold.ID);
+			selectionBefore = getSelectionSnapshot();
+		}
+
 		for (const auto& step : hold.steps)
 			eraseNote(score.notes.at(step), false);
 		score.holdNotes.erase(hold.ID);
 		if (update)
 		{
 			updateSelectionFlag();
-			pushHistory("Erase hold");
+			if (auto edit = beforeCapture.diffAll(ScoreCapture()))
+				pushEdit("Erase hold", toHistoryEdit(std::move(*edit)), std::move(selectionBefore));
 		}
 	}
 
 	id_t ScoreContext::connectHolds(id_t currHoldID, id_t nextHoldID, bool update)
 	{
+		ScoreCapture beforeCapture;
+		SelectionRef selectionBefore;
+		if (update)
+		{
+			beforeCapture.captureHold(score, currHoldID);
+			beforeCapture.captureHold(score, nextHoldID);
+			selectionBefore = getSelectionSnapshot();
+		}
+
 		HoldNote& currHold = score.holdNotes.at(currHoldID);
 		HoldNote& nextHold = score.holdNotes.at(nextHoldID);
 		const HoldNoteStep& currStep = currHold.separators.back();
@@ -2469,7 +2672,11 @@ namespace MikuMikuWorld
 		if (update)
 		{
 			deselectAll();
-			pushHistory("Connect holds");
+			// The next hold is gone and its steps belong to the current hold
+			ScoreCapture afterCapture;
+			afterCapture.captureHold(score, currHoldID);
+			pushEdit("Connect holds", std::move(beforeCapture), std::move(afterCapture),
+			         std::move(selectionBefore));
 		}
 
 		return currHoldID;
@@ -2478,6 +2685,14 @@ namespace MikuMikuWorld
 	std::pair<id_t, id_t> ScoreContext::splitHoldAt(HoldNote& hold, size_t index, bool update)
 	{
 		assert(index > 0 && index < hold.steps.size() - 1);
+		ScoreCapture beforeCapture;
+		SelectionRef selectionBefore;
+		if (update)
+		{
+			beforeCapture.captureHold(score, hold.ID);
+			selectionBefore = getSelectionSnapshot();
+		}
+
 		Note& holdEnd = score.notes.at(hold.steps[index]);
 
 		auto separatorIt =
@@ -2539,11 +2754,23 @@ namespace MikuMikuWorld
 
 		if (update)
 		{
-			selectedNotes.clear();
-			selectedHiSpeedChanges.clear();
+			if (!metadata.isExtendedScore)
+			{
+				holdEnd.flag =
+				    setFlag(holdEnd.flag, NoteFlag::Attached | NoteFlag::NonAttached, false);
+				newHoldStart.flag =
+				    setFlag(newHoldStart.flag, NoteFlag::Attached | NoteFlag::NonAttached, false);
+			}
+			clearSelection();
 			selectNote(holdEnd, true);
 			selectNote(newHoldStart, true);
-			pushHistory("Split hold");
+
+			// The split only touches the old hold, the new hold and their notes
+			ScoreCapture afterCapture;
+			afterCapture.captureHold(score, hold.ID);
+			afterCapture.captureHold(score, newHold.ID);
+			pushEdit("Split hold", std::move(beforeCapture), std::move(afterCapture),
+			         std::move(selectionBefore));
 		}
 
 		return { hold.ID, newHold.ID };
@@ -2552,29 +2779,34 @@ namespace MikuMikuWorld
 	void ScoreContext::insertTempoChange(const Tempo& tempo)
 	{
 		auto&& [tempoIt, inserted] = score.tempoChanges.try_emplace(tempo.tick, tempo);
+		std::optional<Tempo> before;
 		if (!inserted)
 		{
 			auto&& [_, existedTempo] = *tempoIt;
+			before = existedTempo;
 			inserted = existedTempo.quarterPerMinute != tempo.quarterPerMinute;
 			existedTempo.quarterPerMinute = tempo.quarterPerMinute;
 		}
 		if (inserted)
-			pushHistory("Insert BPM change");
+			pushEdit("Insert BPM change", SingleTempoEdit{ tempo.tick, before, tempoIt->second });
 	}
 
 	void ScoreContext::insertTimeSignature(const TimeSignature& timeSig)
 	{
 		auto&& [timeSigIt, inserted] = score.timeSignatures.try_emplace(timeSig.measure, timeSig);
+		std::optional<TimeSignature> before;
 		if (!inserted)
 		{
 			auto&& [_, existedTS] = *timeSigIt;
+			before = existedTS;
 			inserted |= existedTS.numerator != timeSig.numerator;
 			inserted |= existedTS.denominator != timeSig.denominator;
 			existedTS.numerator = timeSig.numerator;
 			existedTS.denominator = timeSig.denominator;
 		}
 		if (inserted)
-			pushHistory("Insert time signature");
+			pushEdit("Insert time signature",
+			         SingleTimeSignatureEdit{ timeSig.measure, before, timeSigIt->second });
 	}
 
 	HiSpeed& ScoreContext::insertHispeedChange(const HiSpeed& hispeed, bool update)
@@ -2589,9 +2821,11 @@ namespace MikuMikuWorld
 		}
 		auto& hispeedChanges = score.layers[selectedLayer].hiSpeedChanges;
 		auto&& [hispeedIt, inserted] = hispeedChanges.try_emplace(hispeed.tick, newHispeed);
+		std::optional<HiSpeed> before;
 		if (!inserted)
 		{
 			auto&& [_, existedHspd] = *hispeedIt;
+			before = existedHspd;
 			inserted |= existedHspd.speed != newHispeed.speed;
 			inserted |= existedHspd.skips != newHispeed.skips;
 			inserted |= existedHspd.ease != newHispeed.ease;
@@ -2599,7 +2833,9 @@ namespace MikuMikuWorld
 			existedHspd = newHispeed;
 		}
 		if (inserted && update)
-			pushHistory("Insert hi-speed changes");
+			pushEdit("Insert hi-speed changes",
+			         SingleHiSpeedEdit{ layered_tick_t{ selectedLayer, hispeed.tick }, before,
+			                            hispeedIt->second });
 		return hispeedIt->second;
 	}
 
@@ -2609,7 +2845,7 @@ namespace MikuMikuWorld
 		auto&& [_, waypoint] = *score.waypoints.emplace_hint(score.waypoints.end(), nextID,
 		                                                     Waypoint{ nextID, tick, name });
 		waypointOrderedView.emplace(tick, &waypoint);
-		pushHistory("Create new waypoint");
+		pushEdit("Create new waypoint", SingleWaypointEdit{ nextID, std::nullopt, waypoint });
 		return waypoint;
 	}
 
@@ -2618,28 +2854,29 @@ namespace MikuMikuWorld
 		auto it = score.waypoints.find(waypointID);
 		if (it == score.waypoints.end())
 			return;
-		for (auto [orderedIt, orderedEnd] = waypointOrderedView.equal_range(it->second.tick);
-		     orderedIt != orderedEnd; ++orderedIt)
+		const Waypoint before = it->second;
+		const Waypoint* erasing = &it->second;
+		for (auto viewIt = waypointOrderedView.begin(); viewIt != waypointOrderedView.end();
+		     ++viewIt)
 		{
-			auto&& [_, waypoint] = *orderedIt;
-			if (waypoint->ID == waypointID)
+			if (viewIt->second == erasing)
 			{
-				waypointOrderedView.erase(orderedIt);
-				score.waypoints.erase(it);
-				pushHistory("Remove waypint");
-				return;
+				waypointOrderedView.erase(viewIt);
+				break;
 			}
 		}
+		score.waypoints.erase(it);
+		pushEdit("Remove waypoint", SingleWaypointEdit{ waypointID, before, std::nullopt });
 	}
 
 	void ScoreContext::insertSkill(tick_t tick)
 	{
-		auto&& [_, inserted] = score.skills.insert(Skill{ tick });
+		auto&& [skillIt, inserted] = score.skills.insert(Skill{ tick });
 		if (inserted)
-			pushHistory("Insert skill");
+			pushEdit("Insert skill", SingleSkillEdit{ tick, std::nullopt, *skillIt });
 	}
 
-	void ScoreContext::setLaneExtension(int value, bool update)
+	void ScoreContext::setLaneExtension(int value)
 	{
 		if (metadata.laneExtension == value)
 			return;
@@ -2672,19 +2909,22 @@ namespace MikuMikuWorld
 			HoldNote& hold = score.holdNotes.at(id);
 			hold.sortSteps(score.notes, !metadata.isExtendedScore);
 		}
-
-		if (update)
-			pushHistory("Change lane extension");
 	}
 
 	void ScoreContext::setScoreExtension(bool isExtended)
 	{
 		if (metadata.isExtendedScore == isExtended)
 			return;
+		// Disabling rewrites most of the score
+		std::unique_ptr<const Score> scoreBefore;
+		if (!isExtended)
+			scoreBefore = std::make_unique<const Score>(score);
+
 		metadata.isExtendedScore = isExtended;
 		if (!isExtended)
 		{
-			setLaneExtension(0, false);
+			// The lane extension is not recorded by history
+			metadata.laneExtension = 0;
 			std::vector<Note> newNotes;
 			for (auto& [_, note] : score.notes)
 			{
@@ -2848,7 +3088,16 @@ namespace MikuMikuWorld
 			}
 		}
 
-		pushHistory("Change score extension");
+		if (isExtended)
+			pushEdit("Change score extension",
+			         MetadataEdit{
+			             MetadataChange<bool>{ &ScoreMetadata::isExtendedScore, { false, true } } },
+			         false);
+		else
+			pushEdit("Change score extension",
+			         ScoreExtensionEdit{
+			             { std::move(scoreBefore), std::make_unique<const Score>(score) } },
+			         false);
 	}
 
 	bool ScoreContext::isLayerVisible(id_t layer) const

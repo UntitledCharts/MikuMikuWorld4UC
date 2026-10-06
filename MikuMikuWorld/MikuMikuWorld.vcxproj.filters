@@ -104,6 +104,9 @@
     <ClCompile Include="ScoreContext.cpp">
       <Filter>ScoreEditor</Filter>
     </ClCompile>
+    <ClCompile Include="HistoryEdit.cpp">
+      <Filter>ScoreEditor</Filter>
+    </ClCompile>
     <ClCompile Include="HistoryManager.cpp">
       <Filter>ScoreEditor</Filter>
     </ClCompile>
@@ -326,6 +329,9 @@
       <Filter>ScoreEditor\Include</Filter>
     </ClInclude>
     <ClInclude Include="ScoreContext.h">
+      <Filter>ScoreEditor\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="HistoryEdit.h">
       <Filter>ScoreEditor\Include</Filter>
     </ClInclude>
     <ClInclude Include="HistoryManager.h">

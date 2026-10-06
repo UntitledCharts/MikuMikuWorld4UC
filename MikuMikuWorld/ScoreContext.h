@@ -9,6 +9,7 @@
 #include "ScoreStats.h"
 #include <unordered_set>
 #include <atomic>
+#include <optional>
 
 namespace MikuMikuWorld
 {
@@ -130,6 +131,7 @@ namespace MikuMikuWorld
 
 		Score score;
 		ScoreMetadata metadata;
+		ScoreMetadata workingMetadata;
 		std::string filename;
 		ScoreStats scoreStats;
 		HistoryManager history;
@@ -140,8 +142,9 @@ namespace MikuMikuWorld
 		bool showAllLayers = false;
 		SelectionFlag selectedFlag = SelectionFlag::None;
 
+		// pending music changes will be handled in the timeline
 		bool isPendingLoadMusic{ false };
-		std::string pendingLoadMusicFilename{};
+		bool isPendingChangeMusicOffset{ false };
 		std::unique_ptr<std::atomic_bool> isMusicLoading =
 		    std::make_unique<std::atomic_bool>(false);
 
@@ -150,8 +153,11 @@ namespace MikuMikuWorld
 		id_t nextHoldID = 0;
 
 		id_t selectedLayer = 0;
-		NoteViewCollection selectedNotes;
-		HiSpeedRefCollection selectedHiSpeedChanges;
+		ScoreSelection selection;
+		ScoreCapture selectionCapture; // State of the selection as of last pushed to history
+		SelectionRef selectionSnapshot;
+
+		NoteViewCollection selectedNotes; // fast lookup for selection.notes
 		std::vector<Note*> hoveringNotes;
 		NoteOrderedCollection notesOrderedView; // fast lookup
 		WaypointOrderedCollection waypointOrderedView;
@@ -182,22 +188,23 @@ namespace MikuMikuWorld
 		void setHoldSeparator(int separator = true);
 
 		void updateSelectionFlag();
+		void updateSelectionView();
+		void updateViews();
+		// Clear selection and its view without updating the selection flag
+		void clearNoteSelection();
+		void clearHiSpeedSelection();
+		void clearSelection();
 
-		bool hasAnySelected() const;
-		bool hasAnyNoteSelected() const;
-		bool hasAnyHispeedSelected() const;
-		bool hasNoteSelected(id_t noteID) const;
-		bool hasNoteSelected(const Note& note) const;
-		bool hasHispeedSelected(const HiSpeed& hispeed) const;
 		tick_t getMinTickFromSelection() const;
 
 		void selectNote(Note& note, bool update = true);
 		void selectHiSpeed(const HiSpeed& hispeed);
-		void deselectNote(const Note& note);
+		void deselectNote(const Note& note, bool update = true);
 		void deselectHiSpeed(const HiSpeed& hispeed);
 		void selectAll(id_t layer = LAYER_ALL);
 		void deselectAll();
 
+		SelectionRef getSelectionSnapshot();
 		void deleteSelection();
 		void flipSelection();
 		void cutSelection();
@@ -226,17 +233,44 @@ namespace MikuMikuWorld
 		void convertGuideToHold(bool critical);
 		void convertHoldToNone();
 
-		void updateViews();
+		HistoryContext historyContext();
 		void undo();
 		void redo();
-		void pushHistory(std::string_view description);
+		// selectionChange: the selection to restore on undo/redo. nullptr clears the selection
+		void pushHistory(std::string_view description, HistoryEdit edit,
+		                 SelectionChange selectionChange = {});
 
-		Note* insertNote(const Note& note, id_t holdID = -1, bool update = true);
+		// Attempt to push edits of selected items.
+		// Return false if push failed (nothing changed)
+		bool pushSelectionChanged(std::string_view description);
+		bool pushSelectionEdit(std::string_view description, ScoreCapture&& baseCapture,
+		                       SelectionRef&& selectionBefore);
+		// For edits that change more than what the selection captures
+		// (e.g. creating notes that aren't selected afterwards)
+		bool pushEdit(std::string_view description, ScoreCapture&& beforeCapture,
+		              ScoreCapture&& afterCapture, SelectionRef&& selectionBefore);
+		// Pushes the layer edit made since the capture
+		void pushLayersEdit(std::string_view description, LayerCapture&& before);
+		// Pushes an edit that does not change the selection.
+		// saveSelection restores the selection on undo/redo
+		void pushEdit(std::string_view description, HistoryEdit edit, bool saveSelection = true);
+		void pushEdit(std::string_view description, HistoryEdit edit,
+		              SelectionRef&& selectionBefore);
+		// Commit the current working metadata field and push it onto the history
+		template <typename T>
+		inline bool pushWorkingMetadata(T ScoreMetadata::* field, std::string_view description,
+		                                bool deferred = false);
+
+		// update: record the insertion as its own history entry (and finalize the hold)
+		// select: also select the inserted note, the selection is saved with the entry
+		Note* insertNote(const Note& note, id_t holdID = -1, bool update = true,
+		                 bool select = false);
 		// Will affect any view that referencing the note, like selection
 		// Please make a copy if you need to erase them while iterating
 		void eraseNote(Note& note, bool update = true);
 		std::tuple<HoldNote&, Note&, Note&> insertHold(const Note& startNote, const Note& endNote,
-		                                               const HoldNote& hold, bool update = true);
+		                                               const HoldNote& hold, bool update = true,
+		                                               bool select = false);
 		void eraseHold(HoldNote& hold, bool update = true);
 		// Connects two holds together
 		id_t connectHolds(id_t currHoldID, id_t nextHoldID, bool update = true);
@@ -248,11 +282,32 @@ namespace MikuMikuWorld
 		void eraseWaypoint(id_t waypointID);
 		void insertSkill(tick_t tick);
 
-		void setLaneExtension(int value, bool update = true);
+		void setLaneExtension(int value);
 		void setScoreExtension(bool isExtended);
 
 		bool isLayerVisible(id_t layer) const;
 		bool isLayerInteractive(id_t layer) const;
 		bool isLayerSelected(id_t layer) const;
+
+	  private:
+		void updateSelectionCapture();
+		void assertNoteSelection();
+		void onHistoryPushed(bool invalidateCapture = true);
+		void onHistoryApplied();
 	};
+
+	template <typename T>
+	inline bool ScoreContext::pushWorkingMetadata(T ScoreMetadata::* field,
+	                                              std::string_view description, bool deferred)
+	{
+		T& before = metadata.*field;
+		T& after = workingMetadata.*field;
+		if (before == after)
+			return false;
+		MetadataEdit edit{ MetadataChange<T>{ field, { before, after } } };
+		if (!deferred)
+			before = after;
+		pushHistory(description, std::move(edit));
+		return true;
+	}
 }

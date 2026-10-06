@@ -180,6 +180,7 @@
     <ClCompile Include="BinaryReader.cpp" />
     <ClCompile Include="BinaryWriter.cpp" />
     <ClCompile Include="File.cpp" />
+    <ClCompile Include="HistoryEdit.cpp" />
     <ClCompile Include="HistoryManager.cpp" />
     <ClCompile Include="ImGuiManager.cpp" />
     <ClCompile Include="ImGui\imgui.cpp" />
@@ -245,6 +246,7 @@
     <ClInclude Include="Constants.h" />
     <ClInclude Include="Enum.h" />
     <ClInclude Include="File.h" />
+    <ClInclude Include="HistoryEdit.h" />
     <ClInclude Include="HistoryManager.h" />
     <ClInclude Include="IconsFontAwesome5.h" />
     <ClInclude Include="ImGuiManager.h" />
