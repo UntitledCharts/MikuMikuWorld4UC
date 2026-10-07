@@ -12,6 +12,7 @@
 [![](https://byob.yarr.is/UntitledCharts/MikuMikuWorld4UC/coverage-pt)](./MikuMikuWorld/res/i18n/pt.csv)
 [![](https://byob.yarr.is/UntitledCharts/MikuMikuWorld4UC/coverage-zh)](./MikuMikuWorld/res/i18n/zh.csv)
 [![](https://byob.yarr.is/UntitledCharts/MikuMikuWorld4UC/coverage-zh-tw)](./MikuMikuWorld/res/i18n/zh-tw.csv)
+[![](https://byob.yarr.is/UntitledCharts/MikuMikuWorld4UC/coverage-zh-tw)](./MikuMikuWorld/res/i18n/zh-tw.csv)
 
 Fork of [MikuMikuWorld](https://github.com/crash5band/MikuMikuWorld) for [UntitledCharts](https://untitledcharts.com/).
 
@@ -48,6 +49,7 @@ If you want to contribute a translation, please see [the guide](./TRANSLATION.md
 - Português do Brasil (Brazillian Portuguese) by @\_\_noradrenaline and Myllo (@mynameismyllo)
 - 中文(简体) (Chinese Simplified) by [@\_guanfei\_](https://github.com/GuanFeiHK)
 - 中文(繁體) (Chinese Traditional) by [(@269Seahorse)](https://github.com/269Seahorse)
+- bahasa Indonesia (Indonesian) by [@rokiri](https://github.com/rokiri)
 
 ## Requirements
 

@@ -122,3 +122,11 @@ jobs:
           STATUS: ${{ steps.check.outputs.coverage_zh-tw }}%
           COLOR: ${{ steps.check.outputs.coverage_zh-tw == '100.0' && 'green' || 'orange' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Translation Coverage: id"
+        uses: RubbaBoy/BYOB@v1.3.0
+        with:
+          NAME: coverage-id
+          LABEL: 'Indonesia'
+          STATUS: ${{ steps.check.outputs.coverage_id }}%
+          COLOR: ${{ steps.check.outputs.coverage_id == '100.0' && 'green' || 'orange' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -25,6 +25,7 @@ MikuMikuWorldの元の機能に加え、以下の機能が追加されていま�
 - Português do Brasil (ブラジルポルトガル語) ：@\_\_noradrenalineとMyllo (mynameismyllo)
 - 中国語（簡体字） ：[@\_guanfei\_](https://github.com/GuanFeiHK)
 - 中国語（繁体字） : [(@269Seahorse)](https://github.com/269Seahorse)
+- bahasa Indonesia (インドネシア語) by [@rokiri](https://github.com/rokiri)
 
 ## 必要な環境：
 - 64bitのWindows 10以上¹
