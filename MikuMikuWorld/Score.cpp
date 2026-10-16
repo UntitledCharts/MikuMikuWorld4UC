@@ -16,10 +16,7 @@ namespace MikuMikuWorld
 
 	bool ScoreSelection::hasNoteID(id_t noteID) const { return notes.count(noteID); }
 	bool ScoreSelection::has(const Note& note) const { return notes.count(note.ID); }
-	bool ScoreSelection::has(const HiSpeed& hispeed) const
-	{
-		return hispeeds.count({ hispeed.layer, hispeed.tick });
-	}
+	bool ScoreSelection::has(const HiSpeed& hispeed) const { return hispeeds.count(hispeed.ID); }
 
 	void ScoreSelection::clearAll()
 	{

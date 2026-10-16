@@ -82,9 +82,7 @@ namespace MikuMikuWorld
 		dummies =
 		    getCount(score.notes, [](const Note& n) { return hasFlag(n.flag, NoteFlag::Dummy); });
 
-		hispeeds = std::accumulate(score.layers.begin(), score.layers.end(), size_t(0),
-		                           [](size_t val, const Layer& layer)
-		                           { return val + layer.hiSpeedChanges.size(); });
+		hispeeds = score.hiSpeedChanges.size();
 
 		total = score.notes.size();
 		calculateCombo(score);

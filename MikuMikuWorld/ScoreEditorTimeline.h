@@ -39,6 +39,7 @@ namespace MikuMikuWorld
 		void loadMusic(const std::string& filename);
 		void loadScore(Score score, ScoreMetadata metadata, const std::string& filename);
 		bool saveScore(const std::string& filename);
+		void onScoreLoad();
 
 		ScoreEditorTimeline(id_t id, Audio::AudioManager& manager);
 		const char* getWindowName() const;

@@ -32,7 +32,11 @@ namespace MikuMikuWorld
 	struct Score;
 	TimeSignature& getTimeSignAt(Score& score, measure_t measure);
 	Tempo& getTempoAt(Score& score, tick_t tick);
-	HiSpeed* getHiSpeedAt(Score& score, tick_t tick, id_t layer);
 
-	bool insertTempoChange(TempoCollection& collection, const Tempo& tempo);
+	float getEasedSpeed(tick_t startTick, tick_t endTick, float startSpeed, float endSpeed,
+	                    tick_t currentTick, HiSpeedEaseType ease);
+	float getScaledTick(tick_t startTick, tick_t endTick, float startSpeed, float endSpeed,
+	                    HiSpeedEaseType ease, tick_t fromTick = -1, tick_t toTick = -1);
+	float accumulateScaledTick(tick_t tick, id_t layer, const HiSpeedCollection& hs,
+	                           const HiSpeedOrderedCollection* ordHs = nullptr, tick_t fromTick = 0);
 }

@@ -404,31 +404,25 @@ namespace MikuMikuWorld
 		if (selection.empty())
 			return;
 
-		// The hi-speeds move to other keys, so the selection changes along with the edit
-		SelectionRef selectionBefore = getSelectionSnapshot();
-		ScoreCapture beforeCapture = selectionCapture;
-
 		for (auto&& [_, pnote] : selectedNotes)
 			pnote->layer = layer;
 
-		HiSpeedRefCollection deletingHiSpeed = std::move(selection.hispeeds);
-		clearHiSpeedSelection();
-		for (auto it = deletingHiSpeed.begin(), end = deletingHiSpeed.end(); it != end;)
+		for (auto&& hispeedID : selection.hispeeds)
 		{
-			auto&& [curLayer, tick] = *(it++);
-			HiSpeedCollection& curCollection = score.layers[curLayer].hiSpeedChanges;
-			HiSpeedCollection& newCollection = score.layers[layer].hiSpeedChanges;
-			HiSpeed& hispeed = curCollection.at(tick);
+			HiSpeed& hispeed = score.hiSpeedChanges.at(hispeedID);
+			layered_tick_t oldKey = { hispeed.layer, hispeed.tick };
+			layered_tick_t newKey = { layer, hispeed.tick };
 
-			if (hispeed.layer != layer && newCollection.count(tick) == 0)
+			if (hispeed.layer != layer && hispeedOrderedView.count(newKey) == 0)
 			{
+				auto node = hispeedOrderedView.extract(oldKey);
+				node.key() = newKey;
+				hispeedOrderedView.insert(std::move(node));
 				hispeed.layer = layer;
-				newCollection.insert(curCollection.extract(tick));
 			}
-			selectHiSpeed(hispeed);
 		}
 
-		if (pushSelectionEdit("Change layer", std::move(beforeCapture), std::move(selectionBefore)))
+		if (pushSelectionChanged("Change layer"))
 			updateSelectionFlag();
 	}
 
@@ -873,23 +867,18 @@ namespace MikuMikuWorld
 	tick_t ScoreContext::getMinTickFromSelection() const
 	{
 		using note_view_t = NoteViewCollection::value_type;
-		using hispeed_ref_t = HiSpeedRefCollection::value_type;
 		auto minNoteIt = std::min_element(selectedNotes.begin(), selectedNotes.end(),
 		                                  [](const note_view_t& nv1, const note_view_t& nv2)
 		                                  { return nv1.second->tick < nv2.second->tick; });
 		tick_t minTick = minNoteIt == selectedNotes.end() ? MAX_TICK : minNoteIt->second->tick;
 
-		auto hispeedComp = [&](const hispeed_ref_t& hs1, const hispeed_ref_t& hs2)
-		{
-			return score.layers[hs1.first].hiSpeedChanges.at(hs1.second).tick <
-			       score.layers[hs2.first].hiSpeedChanges.at(hs2.second).tick;
-		};
+		auto hispeedComp = [&](const id_t& hs1, const id_t& hs2)
+		{ return score.hiSpeedChanges.at(hs1).tick < score.hiSpeedChanges.at(hs2).tick; };
 		auto minHspdIt =
 		    std::min_element(selection.hispeeds.begin(), selection.hispeeds.end(), hispeedComp);
 		if (minHspdIt == selection.hispeeds.end())
 			return minTick;
-		return std::min(score.layers[minHspdIt->first].hiSpeedChanges.at(minHspdIt->second).tick,
-		                minTick);
+		return std::min(score.hiSpeedChanges.at(*minHspdIt).tick, minTick);
 	}
 
 	void ScoreContext::clearNoteSelection()
@@ -950,9 +939,8 @@ namespace MikuMikuWorld
 
 	void ScoreContext::selectHiSpeed(const HiSpeed& hispeed)
 	{
-		layered_tick_t key{ hispeed.layer, hispeed.tick };
-		if (selection.hispeeds.insert(key).second)
-			selectionCapture.captureHiSpeed(score, key);
+		if (selection.hispeeds.insert(hispeed.ID).second)
+			selectionCapture.captureHiSpeed(score, hispeed.ID);
 	}
 
 	void ScoreContext::deselectNote(const Note& note, bool update)
@@ -965,7 +953,7 @@ namespace MikuMikuWorld
 
 	void ScoreContext::deselectHiSpeed(const HiSpeed& hispeed)
 	{
-		selection.hispeeds.erase({ hispeed.layer, hispeed.tick });
+		selection.hispeeds.erase(hispeed.ID);
 	}
 
 	void ScoreContext::selectAll(id_t layer)
@@ -976,10 +964,9 @@ namespace MikuMikuWorld
 			if (layer == LAYER_ALL || note.layer == layer)
 				selectNote(note, false);
 
-		for (id_t l = 0; l < score.layers.size(); ++l)
-			if (layer == LAYER_ALL || l == layer)
-				for (auto&& [tick, hispeed] : score.layers[l].hiSpeedChanges)
-					selectHiSpeed(hispeed);
+		for (auto&& [ID, hispeed] : score.hiSpeedChanges)
+			if (layer == LAYER_ALL || hispeed.layer == layer)
+				selectHiSpeed(hispeed);
 
 		updateSelectionFlag();
 	}
@@ -1009,9 +996,7 @@ namespace MikuMikuWorld
 		// Same for hi-speeds, e.g. after undoing the insertion of a selected one
 		for (auto it = selection.hispeeds.begin(); it != selection.hispeeds.end();)
 		{
-			const auto& [layer, tick] = *it;
-			if (layer < 0 || layer >= static_cast<id_t>(score.layers.size()) ||
-			    score.layers[layer].hiSpeedChanges.count(tick) == 0)
+			if (score.hiSpeedChanges.count(*it) == 0)
 				it = selection.hispeeds.erase(it);
 			else
 				++it;
@@ -1086,10 +1071,8 @@ namespace MikuMikuWorld
 			hold.sortSteps(score.notes, !metadata.isExtendedScore);
 			afterCapture.captureHold(score, ID);
 		}
-		for (auto& [layer, tick] : deletingHiSpeed)
-		{
-			score.layers[layer].hiSpeedChanges.erase(tick);
-		}
+		for (const id_t& id : deletingHiSpeed)
+			eraseHispeedChange(score.hiSpeedChanges.at(id), false);
 
 		updateSelectionFlag();
 		if (auto edit = beforeCapture.diffAll(afterCapture))
@@ -1252,11 +1235,15 @@ namespace MikuMikuWorld
 				newHold.updateFading(score.notes);
 			}
 
-			for (const auto& [_, hispeed] : pasteData.hiSpeedChanges)
+			for (const HiSpeed& hispeed : pasteData.hiSpeedChanges)
 			{
 				HiSpeed newHispeed = hispeed;
 				newHispeed.tick += offsetTick;
-				beforeCapture.captureHiSpeed(score, { newHispeed.layer, newHispeed.tick });
+				newHispeed.layer = selectedLayer; // paste always goes into the current layer
+				// Pasting over a hi-speed replaces it, in the selected layer
+				auto occupied = hispeedOrderedView.find({ selectedLayer, newHispeed.tick });
+				if (occupied != hispeedOrderedView.end())
+					beforeCapture.captureHiSpeed(score, occupied->second->ID);
 				const HiSpeed& inserted = insertHispeedChange(newHispeed, false);
 				// select newly pasted
 				selectHiSpeed(inserted);
@@ -1565,78 +1552,135 @@ namespace MikuMikuWorld
 		updatePasteSize();
 	}
 
+	struct ShrinkHelper
+	{
+		template <typename T, typename CanSet, typename ReKey, typename GetBegin, typename GetEnd,
+		          typename GetEndEqual>
+		static void shrink_impl(tick_t spacing, std::multimap<tick_t, T*>& tickMap, tick_t baseTick,
+		                        CanSet&& canSetTick, ReKey&& updateView, GetBegin getBegin,
+		                        GetEnd getEnd, GetEndEqual getEndEqual)
+		{
+			if (tickMap.empty())
+				return;
+			tick_t newTick = baseTick;
+
+			for (auto it = getBegin(tickMap); it != getEnd(tickMap);)
+			{
+				auto&& subRange = tickMap.equal_range(it->first);
+				for (auto eqIt = subRange.first; eqIt != subRange.second;)
+				{
+					if (!canSetTick(eqIt->second, newTick))
+					{
+						// Reset, check again with a different tick
+						eqIt = subRange.first;
+						newTick += spacing;
+						continue;
+					}
+					++eqIt;
+				}
+				for (auto eqIt = subRange.first; eqIt != subRange.second; ++eqIt)
+				{
+					eqIt->second->tick = newTick;
+					updateView(eqIt->second, eqIt->first, newTick);
+				}
+
+				newTick += spacing;
+				it = getEndEqual(subRange);
+			}
+		}
+
+		template <typename T, typename CanSet, typename ReKey>
+		static void shrink(tick_t spacing, std::multimap<tick_t, T*>& tickMap, tick_t baseTick,
+		                   CanSet&& canSetTick, ReKey&& updateView)
+		{
+			if (spacing == 0)
+				// Shrinking with spacing 0 is no-op
+				return;
+			if (spacing > 0)
+			{
+				shrink_impl(
+				    spacing, tickMap, baseTick, std::forward<CanSet>(canSetTick),
+				    std::forward<ReKey>(updateView), [](auto& m) { return m.begin(); },
+				    [](auto& m) { return m.end(); }, [](auto& r) { return r.second; });
+			}
+			else if (baseTick != 0) // Avoid shrinking to negative ticks
+			{
+				shrink_impl(
+				    spacing, tickMap, baseTick, std::forward<CanSet>(canSetTick),
+				    std::forward<ReKey>(updateView), [](auto& m) { return m.rbegin(); },
+				    [](auto& m) { return m.rend(); },
+				    [](auto& r) { return std::make_reverse_iterator(r.first); });
+			}
+		}
+	};
+
 	void ScoreContext::shrinkSelection(tick_t spacing)
 	{
 		if ((selection.notes.size() + selection.hispeeds.size()) < 2)
 			return;
 		assertNoteSelection();
 
-		// The selected hi-speeds move to other keys
-		SelectionRef selectionBefore = getSelectionSnapshot();
-		ScoreCapture beforeCapture = selectionCapture;
+		std::unordered_set<id_t> updatingHolds;
+		std::multimap<tick_t, Note*> noteTicks;
+		std::multimap<tick_t, HiSpeed*> hispeedTicks;
+		tick_t baseTick = spacing >= 0 ? MAX_TICK : 0;
 
-		std::unordered_set<id_t> updatingHold;
-		std::vector<NoteOrderedCollection::node_type> updatingNodes;
-		HiSpeedRefCollection updatingHispeed = std::move(selection.hispeeds);
-		selection.hispeeds.clear();
-		updatingNodes.reserve(selectedNotes.size());
 		for (auto&& [ID, pnote] : selectedNotes)
 		{
-			auto&& [it, end] = notesOrderedView.equal_range(pnote->tick);
-			it = std::find_if(it, end, [=](const NoteOrderedCollection::value_type& v)
-			                  { return pnote == v.second; });
-			if (it->second->isHold())
-				updatingHold.emplace(it->second->holdID);
-			updatingNodes.emplace_back(notesOrderedView.extract(it));
+			if (pnote->isHold())
+				updatingHolds.emplace(pnote->holdID);
+			noteTicks.emplace(pnote->tick, pnote);
+			baseTick =
+			    spacing >= 0 ? std::min(baseTick, pnote->tick) : std::max(baseTick, pnote->tick);
 		}
-		std::stable_sort(updatingNodes.begin(), updatingNodes.end(),
-		                 [](const auto& n1, const auto& n2) { return n1.key() < n2.key(); });
-
-		auto shrink = [&](auto ordFunc, auto noteIt, auto endNoteIt, auto hspdIt, auto endHspdIt)
+		for (auto&& ID : selection.hispeeds)
 		{
-			tick_t baseTick;
-			if (noteIt != endNoteIt && hspdIt != endHspdIt)
-				baseTick = std::min(noteIt->key(), hspdIt->second, ordFunc);
-			else if (noteIt != endNoteIt)
-				baseTick = noteIt->key();
-			else
-				baseTick = hspdIt->second;
-			for (tick_t tick = baseTick; noteIt != endNoteIt || hspdIt != endHspdIt;
-			     tick += spacing)
-			{
-				if (noteIt != endNoteIt)
-				{
-					noteIt->key() = tick;
-					noteIt->mapped()->tick = tick;
-					notesOrderedView.insert(std::move(*noteIt));
-					++noteIt;
-				}
-				if (hspdIt != endHspdIt &&
-				    (tick == hspdIt->second ||
-				     score.layers[hspdIt->first].hiSpeedChanges.count(tick) == 0))
-				{
-					auto& hiSpeedChanges = score.layers[hspdIt->first].hiSpeedChanges;
-					auto node = hiSpeedChanges.extract(hspdIt->second);
-					node.key() = tick;
-					node.mapped().tick = tick;
-					hiSpeedChanges.insert(std::move(node));
-					selection.hispeeds.emplace(hspdIt->first, tick);
-					++hspdIt;
-				}
-			}
+			HiSpeed& hispeed = score.hiSpeedChanges.at(ID);
+			hispeedTicks.emplace(hispeed.tick, &hispeed);
+			baseTick =
+			    spacing >= 0 ? std::min(baseTick, hispeed.tick) : std::max(baseTick, hispeed.tick);
 		};
 
-		if (spacing >= 0)
-			shrink(std::less(), updatingNodes.begin(), updatingNodes.end(), updatingHispeed.begin(),
-			       updatingHispeed.end());
-		else
-			shrink(std::greater(), updatingNodes.rbegin(), updatingNodes.rend(),
-			       updatingHispeed.rbegin(), updatingHispeed.rend());
+		ShrinkHelper::shrink(
+		    spacing, noteTicks, baseTick, [](Note*, tick_t) { return true; },
+		    [&](Note* pnote, tick_t oldTick, tick_t newTick)
+		    {
+			    if (oldTick == newTick)
+				    return;
+			    auto&& [it, end] = notesOrderedView.equal_range(oldTick);
+			    it = std::find_if(it, end, [=](const auto& v) { return pnote == v.second; });
+			    if (it != end)
+			    {
+				    auto node = notesOrderedView.extract(it);
+				    node.key() = newTick;
+				    notesOrderedView.insert(std::move(node));
+			    }
+		    });
 
-		for (const auto& holdID : updatingHold)
+		ShrinkHelper::shrink(
+		    spacing, hispeedTicks, baseTick,
+		    [&](HiSpeed* phspd, tick_t newTick)
+		    {
+			    return newTick == phspd->tick ||
+			           hispeedOrderedView.count({ phspd->layer, newTick }) == 0;
+		    },
+		    [&](HiSpeed* phspd, tick_t oldTick, tick_t newTick)
+		    {
+			    if (oldTick == newTick)
+				    return;
+			    auto node = hispeedOrderedView.extract({ phspd->layer, oldTick });
+			    if (!node.empty())
+			    {
+				    node.key().second = newTick;
+				    hispeedOrderedView.insert(std::move(node));
+			    }
+		    });
+
+		for (const auto& holdID : updatingHolds)
 			score.holdNotes.at(holdID).sortSteps(score.notes, !metadata.isExtendedScore);
 
-		pushSelectionEdit("Shrink notes", std::move(beforeCapture), std::move(selectionBefore));
+		// Only selected notes/holds and hispeeds changed
+		pushSelectionChanged("Shrink notes");
 	}
 
 	void ScoreContext::compressSelection()
@@ -1648,130 +1692,164 @@ namespace MikuMikuWorld
 		SelectionRef selectionBefore = getSelectionSnapshot();
 		ScoreCapture beforeCapture = selectionCapture;
 
-		std::unordered_map<id_t, Layer> updatingLayers;
+		using CompressObj = std::variant<Note*, HiSpeed*>;
+		std::multimap<layered_tick_t, CompressObj> compressLayerTicks;
 		std::unordered_set<id_t> updatingHold;
-		std::vector<NoteOrderedCollection::node_type> updatingNodes;
-		HiSpeedRefCollection updatingHispeed = std::move(selection.hispeeds);
-		selection.hispeeds.clear();
-		updatingNodes.reserve(selectedNotes.size());
+		tick_t baseTick = MAX_TICK;
 		for (auto&& [ID, pnote] : selectedNotes)
 		{
-			auto&& [it, end] = notesOrderedView.equal_range(pnote->tick);
-			it = std::find_if(it, end, [=](const NoteOrderedCollection::value_type& v)
-			                  { return pnote == v.second; });
-			if (it->second->isHold())
-				updatingHold.emplace(it->second->holdID);
-			updatingLayers.emplace(it->second->layer, score.layers[it->second->layer]);
-			updatingNodes.emplace_back(notesOrderedView.extract(it));
+			if (pnote->isHold())
+				updatingHold.emplace(pnote->holdID);
+			compressLayerTicks.emplace(std::make_pair(pnote->layer, pnote->tick), pnote);
+			baseTick = std::min(baseTick, pnote->tick);
 		}
-		std::stable_sort(updatingNodes.begin(), updatingNodes.end(),
-		                 [](const auto& n1, const auto& n2) { return n1.key() < n2.key(); });
-
-		auto noteIt = updatingNodes.begin(), endNoteIt = updatingNodes.end();
-		auto hspdIt = updatingHispeed.begin(), endHspdIt = updatingHispeed.end();
-		tick_t baseTick;
-		if (noteIt != endNoteIt && hspdIt != endHspdIt)
-			baseTick = std::min(noteIt->key(), hspdIt->second);
-		else if (noteIt != endNoteIt)
-			baseTick = noteIt->key();
-		else
-			baseTick = hspdIt->second;
-
-		tick_t prevTick = baseTick;
-		tick_t tick = baseTick;
-		while (noteIt != endNoteIt || hspdIt != endHspdIt)
+		for (auto&& ID : selection.hispeeds)
 		{
-			tick_t shrinkTick;
-			int compare;
-			if (noteIt != endNoteIt && hspdIt != endHspdIt)
+			HiSpeed& hispeed = score.hiSpeedChanges.at(ID);
+			compressLayerTicks.emplace(std::make_pair(hispeed.layer, hispeed.tick), &hispeed);
+			baseTick = std::min(baseTick, hispeed.tick);
+		}
+		clearHiSpeedSelection();
+
+		// Change of hispeeds are stored separately so we don't mess with our own calculations
+		std::map<layered_tick_t, HiSpeed> compensate;
+		std::unordered_map<id_t, tick_t> movingHispeeds;
+		for (auto begLayerIt = compressLayerTicks.begin(); begLayerIt != compressLayerTicks.end();)
+		{
+			// Iterating through the layer groups
+			id_t curLayer = begLayerIt->first.first;
+			auto endLayerIt = compressLayerTicks.lower_bound(
+			    { curLayer + 1, std::numeric_limits<tick_t>::min() });
+
+			tick_t newTick = baseTick;
+			tick_t prevTick = baseTick;
+			for (auto layerIt = begLayerIt; layerIt != endLayerIt;)
 			{
-				compare = noteIt->key() == hspdIt->second  ? 0
-				          : noteIt->key() < hspdIt->second ? -1
-				                                           : 1;
-				shrinkTick = std::min(noteIt->key(), hspdIt->second);
-			}
-			else
-			{
-				compare = noteIt != endNoteIt ? -1 : 1;
-				shrinkTick = noteIt != endNoteIt ? noteIt->key() : hspdIt->second;
-			}
-			if (shrinkTick != prevTick)
-				++tick;
-			// Shrink notes
-			if (compare <= 0)
-			{
-				noteIt->key() = tick;
-				noteIt->mapped()->tick = tick;
-				notesOrderedView.insert(std::move(*noteIt));
-				++noteIt;
-			}
-			if (compare >= 0)
-			{
-				// The hi-speed at the new tick is replaced if there is one
-				beforeCapture.captureHiSpeed(score, { hspdIt->first, tick });
-				auto& hiSpeedChanges = score.layers[hspdIt->first].hiSpeedChanges;
-				auto node = hiSpeedChanges.extract(hspdIt->second);
-				node.key() = tick;
-				node.mapped().tick = tick;
-				hiSpeedChanges.erase(node.key());
-				hiSpeedChanges.insert(std::move(node));
-				selection.hispeeds.emplace(hspdIt->first, tick);
-				++hspdIt;
-			}
-			// Add Hi-Speed
-			if (shrinkTick != prevTick)
-			{
-				for (auto&& [layerID, layer] : updatingLayers)
+				// Iterating through the tick groups
+				tick_t curTick = layerIt->first.second;
+				auto [tickBeg, tickEnd] = compressLayerTicks.equal_range({ curLayer, curTick });
+
+				if (curTick == prevTick)
 				{
-					float currSpeed = 1.0f;
-					if (layer.hiSpeedChanges.size())
-					{
-						// Using lower bound here because we went the speed before the current tick
-						auto it = layer.hiSpeedChanges.lower_bound(shrinkTick);
-						if (it == layer.hiSpeedChanges.begin())
-							currSpeed = it->second.speed;
-						else
-							currSpeed = std::prev(it)->second.speed;
-					}
-
-					auto& hiSpeedChanges = score.layers[layerID].hiSpeedChanges;
-					float shrinkSpeed = (shrinkTick - prevTick) * currSpeed;
-					auto it = hiSpeedChanges.upper_bound(tick - 1);
-					// The hi-speed that gets added or changed here is selected afterwards
-					beforeCapture.captureHiSpeed(score, { layerID, tick - 1 });
-					if (it == hiSpeedChanges.begin() ||
-					    (std::prev(it)->second.speed != shrinkSpeed &&
-					     std::prev(it)->first != tick - 1))
-						hiSpeedChanges.emplace(tick - 1, HiSpeed{ tick - 1, layerID, shrinkSpeed });
-					else
-						std::prev(it)->second.speed = shrinkSpeed;
-					selection.hispeeds.emplace(layerID, tick - 1);
+					// Current tick == base line tick, nothing to shrink
+					layerIt = tickEnd;
+					newTick++;
+					continue;
 				}
+				else if (newTick == 0)
+				{
+					// Guard against -1 compensation tick
+					newTick++;
+				}
+
+				for (auto objIt = tickBeg; objIt != tickEnd; ++objIt)
+				{
+					// Shrinking
+					struct CompressVisitor
+					{
+						ScoreContext& context;
+						tick_t newTick;
+						std::unordered_map<id_t, tick_t>& movingHispeeds;
+
+						void operator()(Note* note) const
+						{
+							auto&& [it, end] = context.notesOrderedView.equal_range(note->tick);
+							it = std::find_if(it, end,
+							                  [=](const auto& v) { return note == v.second; });
+							note->tick = newTick;
+
+							if (it != end)
+							{
+								auto node = context.notesOrderedView.extract(it);
+								node.key() = newTick;
+								context.notesOrderedView.insert(std::move(node));
+							}
+						}
+						void operator()(HiSpeed* hispeed) const
+						{
+							movingHispeeds[hispeed->ID] = newTick;
+						}
+					};
+
+					std::visit(CompressVisitor{ *this, newTick, movingHispeeds }, objIt->second);
+				}
+
+				// Calculate compensation
+				float shrinkSpeed = accumulateScaledTick(curTick, curLayer, score.hiSpeedChanges,
+				                                         &hispeedOrderedView, prevTick);
+				compensate.emplace(layered_tick_t{ curLayer, newTick - 1 },
+				                   HiSpeed{ newTick - 1, curLayer, -1, shrinkSpeed });
+
+				prevTick = curTick;
+				layerIt = tickEnd;
+				newTick++;
 			}
-			prevTick = shrinkTick;
+
+			// Restore the speed after compression
+			HiSpeed afterHispeed{ newTick - 1, curLayer, -1 };
+			HiSpeed* curHispeed = getHispeedAtOrBeforeTick(curLayer, prevTick);
+			HiSpeed* nxtHispeed = getHispeedAtOrAfterTick(curLayer, prevTick);
+			if (curHispeed && nxtHispeed &&
+			    isWithinRange(curHispeed->tick, nxtHispeed->tick, prevTick))
+			{
+				afterHispeed.speed =
+				    getEasedSpeed(curHispeed->tick, nxtHispeed->tick, curHispeed->speed,
+				                  nxtHispeed->speed, prevTick, curHispeed->ease);
+				afterHispeed.ease = curHispeed->ease;
+			}
+			else if (curHispeed)
+			{
+				afterHispeed.speed = curHispeed->speed;
+				afterHispeed.ease = curHispeed->ease;
+			}
+			compensate.emplace(layered_tick_t{ curLayer, newTick - 1 }, afterHispeed);
+			begLayerIt = endLayerIt;
 		}
 
-		for (auto&& [layerID, layer] : updatingLayers)
+		for (auto&& [ID, newTick] : movingHispeeds)
 		{
-			float endSpeed = 1.0f;
-			if (layer.hiSpeedChanges.size())
+			HiSpeed& hispeed = score.hiSpeedChanges.at(ID);
+			auto it = hispeedOrderedView.find({ hispeed.layer, hispeed.tick });
+			auto replaceIt = hispeedOrderedView.find({ hispeed.layer, newTick });
+			if (replaceIt != hispeedOrderedView.end() && replaceIt->second != &hispeed)
 			{
-				auto it = layer.hiSpeedChanges.upper_bound(prevTick);
-				if (it == layer.hiSpeedChanges.begin())
-					endSpeed = it->second.speed;
-				else
-					endSpeed = std::prev(it)->second.speed;
+				beforeCapture.captureHiSpeed(score, replaceIt->second->ID);
+				eraseHispeedChange(*replaceIt->second, false);
 			}
+			hispeed.tick = newTick;
+			hispeed.ease = HiSpeedEaseType::None;
+			if (it != hispeedOrderedView.end())
+			{
+				auto node = hispeedOrderedView.extract(it);
+				node.key().second = newTick;
+				hispeedOrderedView.insert(std::move(node));
+			}
+			// Inherit the speed value from the compensated hispeed
+			auto compIt = compensate.find({ hispeed.layer, hispeed.tick });
+			if (compIt != compensate.end())
+			{
+				hispeed.speed = compIt->second.speed;
+				compensate.erase(compIt);
+			}
+			selectHiSpeed(hispeed);
+		}
 
-			auto& hiSpeedChanges = score.layers[layerID].hiSpeedChanges;
-			auto it = hiSpeedChanges.upper_bound(tick);
-			beforeCapture.captureHiSpeed(score, { layerID, tick });
-			if (it == hiSpeedChanges.begin() ||
-			    (std::prev(it)->second.speed != endSpeed && std::prev(it)->first != tick))
-				hiSpeedChanges.emplace(tick, HiSpeed{ tick, layerID, endSpeed });
-			else
-				std::prev(it)->second.speed = endSpeed;
-			selection.hispeeds.emplace(layerID, tick);
+		for (auto& [key, hispeed] : compensate)
+		{
+			HiSpeed* insertOrReplace = getHispeedAtOrBeforeTick(key.first, key.second);
+			if (insertOrReplace && insertOrReplace->tick == hispeed.tick)
+			{
+				// Replace
+				beforeCapture.captureHiSpeed(score, insertOrReplace->ID);
+				hispeed.ID = insertOrReplace->ID;
+				*insertOrReplace = hispeed;
+			}
+			else if (!insertOrReplace || insertOrReplace->speed != hispeed.speed ||
+			         insertOrReplace->ease != HiSpeedEaseType::Linear)
+			{
+				insertOrReplace = &insertHispeedChange(hispeed, false);
+			}
+			selectHiSpeed(*insertOrReplace);
 		}
 
 		for (const auto& holdID : updatingHold)
@@ -1948,50 +2026,50 @@ namespace MikuMikuWorld
 
 		SelectionRef selectionBefore = getSelectionSnapshot();
 		ScoreCapture beforeCapture = selectionCapture;
-		std::vector<layered_tick_t> insertedHispeed;
 		const tick_t tickPerDivision = TICKS_PER_QUARTER / quarterDivision;
 		const EaseFunction easeFunc = getEaseFunction(ease);
-		constexpr tick_t MIN_TICK = 0;
-		for (auto it = selection.hispeeds.begin(); it != selection.hispeeds.end();)
-		{
-			// Find the range of hispeeds in the same layer
-			auto&& [layer, _] = *it;
-			auto first = selection.hispeeds.lower_bound({ layer, MIN_TICK });
-			auto last = selection.hispeeds.upper_bound({ layer, MAX_TICK });
-			auto& hiSpeedChanges = score.layers[layer].hiSpeedChanges;
+		HiSpeedOrderedCollection selectedOrdered;
 
-			for (auto next = std::next(first); next != last; first = next++)
+		for (auto&& ID : selection.hispeeds)
+		{
+			HiSpeed& hispeed = score.hiSpeedChanges.at(ID);
+			selectedOrdered.emplace(std::make_pair(hispeed.layer, hispeed.tick), &hispeed);
+		}
+
+		for (auto it = selectedOrdered.begin(); it != selectedOrdered.end();)
+		{
+			id_t curLayer = it->first.first;
+			auto last = selectedOrdered.lower_bound({ curLayer + 1, 0 });
+			for (auto next = std::next(it); next != last; ++it, ++next)
 			{
-				const HiSpeed& hispeed = hiSpeedChanges.at(it->second);
-				const HiSpeed& nxtHispeed = hiSpeedChanges.at(next->second);
-				for (tick_t tick =
-				         (hispeed.tick + tickPerDivision) / tickPerDivision * tickPerDivision;
-				     tick < nxtHispeed.tick; tick += tickPerDivision)
+				const HiSpeed& fromHspd = *it->second;
+				const HiSpeed& toHspd = *next->second;
+				tick_t ceilStartTick =
+				    (fromHspd.tick + tickPerDivision) / tickPerDivision * tickPerDivision;
+				for (tick_t tick = ceilStartTick; tick < toHspd.tick; tick += tickPerDivision)
 				{
-					float speed = easeFunc(hispeed.speed, nxtHispeed.speed,
-					                       unlerp(hispeed.tick, nxtHispeed.tick, tick));
-					beforeCapture.captureHiSpeed(score, { layer, tick });
-					auto insertIt = hiSpeedChanges.lower_bound(tick);
-					if (insertIt == hiSpeedChanges.end() || insertIt->second.tick != tick)
-						hiSpeedChanges.emplace_hint(insertIt, tick, HiSpeed{ tick, layer, speed });
+					float speed = easeFunc(fromHspd.speed, toHspd.speed,
+					                       unlerp(fromHspd.tick, toHspd.tick, tick));
+					HiSpeed* existing = getHispeedAt(curLayer, tick);
+					if (existing)
+					{
+						beforeCapture.captureHiSpeed(score, existing->ID);
+						existing->speed = speed;
+					}
 					else
-						insertIt->second.speed = speed;
-					insertedHispeed.emplace_back(layer, tick);
+					{
+						existing =
+						    &insertHispeedChange(HiSpeed{ tick, curLayer, -1, speed }, false);
+					}
+					selectHiSpeed(*existing);
 				}
 			}
-
 			it = last;
 		}
 
-		selection.hispeeds.insert<std::vector<layered_tick_t>::iterator>(insertedHispeed.begin(),
-		                                                                 insertedHispeed.end());
-
-		if (insertedHispeed.size())
-		{
+		if (pushSelectionEdit("Lerp hispeeds", std::move(beforeCapture),
+		                      std::move(selectionBefore)))
 			updateSelectionFlag();
-			pushSelectionEdit("Lerp hispeeds", std::move(beforeCapture),
-			                  std::move(selectionBefore));
-		}
 	}
 
 	void ScoreContext::convertHoldToGuide(GuideColor color)
@@ -2205,6 +2283,10 @@ namespace MikuMikuWorld
 		{
 			waypointOrderedView.emplace(waypoint.tick, &waypoint);
 		}
+
+		hispeedOrderedView.clear();
+		for (auto&& [ID, hispeed] : score.hiSpeedChanges)
+			hispeedOrderedView.emplace(layered_tick_t{ hispeed.layer, hispeed.tick }, &hispeed);
 	}
 
 	HistoryContext ScoreContext::historyContext()
@@ -2809,34 +2891,94 @@ namespace MikuMikuWorld
 			         SingleTimeSignatureEdit{ timeSig.measure, before, timeSigIt->second });
 	}
 
+	HiSpeed* ScoreContext::getHispeedAt(id_t layer, tick_t tick)
+	{
+		layered_tick_t key = { layer, tick };
+		auto it = hispeedOrderedView.lower_bound(key);
+		if (it == hispeedOrderedView.end() || it->first != key)
+			return nullptr;
+		return it->second;
+	}
+
+	HiSpeed* ScoreContext::getHispeedAtOrBeforeTick(id_t layer, tick_t tick)
+	{
+		auto it = hispeedOrderedView.upper_bound({ layer, tick });
+		if (it == hispeedOrderedView.begin())
+			return nullptr;
+		it = std::prev(it);
+		return it->second->layer == layer ? it->second : nullptr;
+	}
+
+	HiSpeed* ScoreContext::getHispeedAtOrAfterTick(id_t layer, tick_t tick)
+	{
+		auto it = hispeedOrderedView.lower_bound({ layer, tick });
+		if (it == hispeedOrderedView.end() || it->first.first != layer)
+			return nullptr;
+		return it->second;
+	}
+
 	HiSpeed& ScoreContext::insertHispeedChange(const HiSpeed& hispeed, bool update)
 	{
 		HiSpeed newHispeed = hispeed;
-		newHispeed.layer = selectedLayer;
+		if (!isArrayIndexInBounds(newHispeed.layer, score.layers))
+			newHispeed.layer = selectedLayer;
 		if (!metadata.isExtendedScore)
 		{
 			newHispeed.skips = 0;
 			newHispeed.ease = HiSpeedEaseType::None;
 			newHispeed.hideNotes = false;
 		}
-		auto& hispeedChanges = score.layers[selectedLayer].hiSpeedChanges;
-		auto&& [hispeedIt, inserted] = hispeedChanges.try_emplace(hispeed.tick, newHispeed);
 		std::optional<HiSpeed> before;
-		if (!inserted)
+		bool insertOrModified = false;
+		HiSpeed* result = getHispeedAt(newHispeed.layer, hispeed.tick);
+		if (result == nullptr)
 		{
-			auto&& [_, existedHspd] = *hispeedIt;
-			before = existedHspd;
-			inserted |= existedHspd.speed != newHispeed.speed;
-			inserted |= existedHspd.skips != newHispeed.skips;
-			inserted |= existedHspd.ease != newHispeed.ease;
-			inserted |= existedHspd.hideNotes != newHispeed.hideNotes;
-			existedHspd = newHispeed;
+			newHispeed.ID = nextHiSpeedID++;
+			result = &score.hiSpeedChanges.emplace(newHispeed.ID, newHispeed).first->second;
+			hispeedOrderedView.emplace(layered_tick_t{ result->layer, result->tick }, result);
+			insertOrModified = true;
 		}
-		if (inserted && update)
-			pushEdit("Insert hi-speed changes",
-			         SingleHiSpeedEdit{ layered_tick_t{ selectedLayer, hispeed.tick }, before,
-			                            hispeedIt->second });
-		return hispeedIt->second;
+		else
+		{
+			before = *result;
+			insertOrModified = !isSame(*result, newHispeed);
+			newHispeed.ID = result->ID;
+			*result = newHispeed;
+		}
+		if (insertOrModified && update)
+		{
+			pushEdit("Insert hi-speed changes", SingleHiSpeedEdit{ result->ID, before, *result });
+			updateSelectionFlag();
+		}
+		return *result;
+	}
+
+	void ScoreContext::eraseHispeedChange(HiSpeed& hispeed, bool update)
+	{
+		auto it = score.hiSpeedChanges.find(hispeed.ID);
+		if (it == score.hiSpeedChanges.end())
+			return;
+		assert(&hispeed == &it->second && "Hispeeds don't refer to the same object?");
+
+		SingleHiSpeedEdit edit{ hispeed.ID, hispeed, std::nullopt };
+		SelectionRef selectionBefore = update ? getSelectionSnapshot() : nullptr;
+
+		for (auto&& [ordIt, end] = hispeedOrderedView.equal_range({ hispeed.layer, hispeed.tick });
+		     ordIt != end; ++ordIt)
+		{
+			if (ordIt->second != &hispeed)
+				continue;
+			hispeedOrderedView.erase(ordIt);
+			break;
+		}
+		selection.hispeeds.erase(hispeed.ID);
+		score.hiSpeedChanges.erase(it);
+
+		if (update)
+		{
+			pushEdit("Erase hispeed", edit, std::move(selectionBefore));
+			updateSelectionFlag();
+		}
 	}
 
 	Waypoint& ScoreContext::insertWaypoint(tick_t tick, const std::string& name)
@@ -3080,8 +3222,17 @@ namespace MikuMikuWorld
 			score.layers.erase(score.layers.begin() + 1, score.layers.end());
 			score.layers[0].forceNoteSpeed = 0;
 			selectedLayer = 0;
-			for (auto&& [_, hispeed] : score.layers[0].hiSpeedChanges)
+			std::vector<id_t> hispeedIDs;
+			std::transform(score.hiSpeedChanges.begin(), score.hiSpeedChanges.end(),
+			               std::back_inserter(hispeedIDs), [](const auto& kv) { return kv.first; });
+			for (auto&& hispeedID : hispeedIDs)
 			{
+				HiSpeed& hispeed = score.hiSpeedChanges.at(hispeedID);
+				if (hispeed.layer != 0)
+				{
+					eraseHispeedChange(hispeed, false);
+					continue;
+				}
 				hispeed.skips = 0;
 				hispeed.ease = HiSpeedEaseType::None;
 				hispeed.hideNotes = false;

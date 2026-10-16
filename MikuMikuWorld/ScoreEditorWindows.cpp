@@ -576,8 +576,10 @@ namespace MikuMikuWorld
 			ImGui::TableNextColumn();
 			if (context.score.layers.size() > 1)
 			{
-				ImGui::Text("%zd (%s) |\t",
-				            context.score.layers[context.selectedLayer].hiSpeedChanges.size(),
+				size_t layerHiSpeedCount = std::distance(
+				    context.hispeedOrderedView.lower_bound({ context.selectedLayer, 0 }),
+				    context.hispeedOrderedView.lower_bound({ context.selectedLayer + 1, 0 }));
+				ImGui::Text("%zd (%s) |\t", layerHiSpeedCount,
 				            context.score.layers[context.selectedLayer].name.c_str());
 				ImGui::SameLine(0, 0);
 			}
@@ -800,15 +802,16 @@ namespace MikuMikuWorld
 		{
 			using value_type = HiSpeedRefCollection::value_type;
 			auto alwaysTrue = [](const value_type& v) { return true; };
-			auto getLayer = [&](const value_type& v) { return v.first; };
+			auto getLayer = [&](const value_type& v)
+			{ return context.score.hiSpeedChanges.at(v).layer; };
 			auto getSpeed = [&](const value_type& v)
-			{ return context.score.layers[v.first].hiSpeedChanges.at(v.second).speed; };
+			{ return context.score.hiSpeedChanges.at(v).speed; };
 			auto getSkips = [&](const value_type& v)
-			{ return context.score.layers[v.first].hiSpeedChanges.at(v.second).skips; };
+			{ return context.score.hiSpeedChanges.at(v).skips; };
 			auto getEase = [&](const value_type& v)
-			{ return context.score.layers[v.first].hiSpeedChanges.at(v.second).ease; };
+			{ return context.score.hiSpeedChanges.at(v).ease; };
 			auto getHideNotes = [&](const value_type& v)
-			{ return context.score.layers[v.first].hiSpeedChanges.at(v.second).hideNotes; };
+			{ return context.score.hiSpeedChanges.at(v).hideNotes; };
 			id_t prevLayer = layer;
 			mixedLayer = !mixedLayer &&
 			             checkMixState(layer, context.selection.hispeeds, getLayer, alwaysTrue);
@@ -1142,9 +1145,9 @@ namespace MikuMikuWorld
 			                                      -MAX_HISPEED, MAX_HISPEED, 0.1);
 			if (state > 0)
 			{
-				for (auto& [l, t] : context.selection.hispeeds)
+				for (const id_t& id : context.selection.hispeeds)
 				{
-					HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
+					HiSpeed& h = context.score.hiSpeedChanges.at(id);
 					h.speed = speed;
 				}
 				if (ImGui::IsItemDeactivated() &&
@@ -1154,9 +1157,9 @@ namespace MikuMikuWorld
 			else if (state < 0)
 			{
 				float offset = speed - oldSpeed;
-				for (auto& [l, t] : context.selection.hispeeds)
+				for (const id_t& id : context.selection.hispeeds)
 				{
-					HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
+					HiSpeed& h = context.score.hiSpeedChanges.at(id);
 					h.speed = std::clamp(h.speed + offset, -MAX_HISPEED, MAX_HISPEED);
 				}
 				if (ImGui::IsItemDeactivated() &&
@@ -1169,9 +1172,9 @@ namespace MikuMikuWorld
 				                               Text::notePropertiesMixedValue,
 				                               hispeedEaseTypeTexts))
 				{
-					for (auto& [l, t] : context.selection.hispeeds)
+					for (const id_t& id : context.selection.hispeeds)
 					{
-						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
+						HiSpeed& h = context.score.hiSpeedChanges.at(id);
 						h.ease = hspdEase;
 					}
 					if (context.pushSelectionChanged("Change Hispeeds ease"))
@@ -1185,9 +1188,9 @@ namespace MikuMikuWorld
 				                                  beatFmtStr, -MAX_HISPEED, MAX_HISPEED);
 				if (state > 0)
 				{
-					for (auto& [l, t] : context.selection.hispeeds)
+					for (const id_t& id : context.selection.hispeeds)
 					{
-						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
+						HiSpeed& h = context.score.hiSpeedChanges.at(id);
 						h.skips = skips;
 					}
 					if (ImGui::IsItemDeactivated() &&
@@ -1197,9 +1200,9 @@ namespace MikuMikuWorld
 				else if (state < 0)
 				{
 					float offset = skips - oldSkips;
-					for (auto& [l, t] : context.selection.hispeeds)
+					for (const id_t& id : context.selection.hispeeds)
 					{
-						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
+						HiSpeed& h = context.score.hiSpeedChanges.at(id);
 						h.skips = std::clamp(h.skips + offset, -MAX_HISPEED, MAX_HISPEED);
 					}
 					if (ImGui::IsItemDeactivated() &&
@@ -1209,9 +1212,9 @@ namespace MikuMikuWorld
 				ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, mixedHideNotes);
 				if (UI::checkboxPropertyRow(Text::hiSpeedHideNotes, hideNotes))
 				{
-					for (auto& [l, t] : context.selection.hispeeds)
+					for (const id_t& id : context.selection.hispeeds)
 					{
-						HiSpeed& h = context.score.layers[l].hiSpeedChanges.at(t);
+						HiSpeed& h = context.score.hiSpeedChanges.at(id);
 						h.hideNotes = hideNotes;
 					}
 					if (context.pushSelectionChanged("Change Hispeeds hide notes"))
@@ -2314,7 +2317,9 @@ namespace MikuMikuWorld
 				LayerCapture before(context.score);
 				id_t layerId = static_cast<int>(context.score.layers.size());
 				float noteSpeed = editForceNoteSpeed ? editNoteSpeed : 0.0f;
-				context.score.layers.push_back(Layer{ layerId, editLayerName, noteSpeed });
+				context.score.layers.push_back(Layer{ editLayerName, noteSpeed });
+				// Starts with a hi-speed at the start
+				context.insertHispeedChange(HiSpeed{ 0, layerId }, false);
 				context.pushLayersEdit(localize(Text::createLayer), std::move(before));
 			}
 		}
@@ -2377,20 +2382,25 @@ namespace MikuMikuWorld
 
 	bool LayersWindow::canLayerMerge(const Score& score, id_t index)
 	{
-		auto& sourceHSC = score.layers[index - 1].hiSpeedChanges;
-		auto& targetHSC = score.layers[index].hiSpeedChanges;
-		auto itSrc = sourceHSC.begin(), endSrc = sourceHSC.end();
-		auto itTrg = targetHSC.begin(), endTrg = targetHSC.end();
-		while (itSrc != endSrc && itTrg != endTrg)
+		// The layer is merged into the one before it. Hi-speeds at the same tick can only be merged
+		// if they are the same, the one from the merged layer is dropped
+		std::map<tick_t, const HiSpeed*> merging;
+		for (const auto& [id, hispeed] : score.hiSpeedChanges)
+			if (hispeed.layer == index - 1)
+				merging.emplace(hispeed.tick, &hispeed);
+
+		for (const auto& [id, hispeed] : score.hiSpeedChanges)
 		{
-			if (itSrc->first < itTrg->first)
-				++itSrc;
-			else
-			{
-				if (itSrc->first == itTrg->first && !isSame(itSrc->second, itTrg->second))
-					return false;
-				++itTrg;
-			}
+			if (hispeed.layer != index)
+				continue;
+			auto it = merging.find(hispeed.tick);
+			if (it == merging.end())
+				continue;
+			const HiSpeed& other = *it->second;
+			// The position is not a difference here
+			if (hispeed.speed != other.speed || hispeed.skips != other.skips ||
+			    hispeed.ease != other.ease || hispeed.hideNotes != other.hideNotes)
+				return false;
 		}
 		return true;
 	}
@@ -2403,14 +2413,35 @@ namespace MikuMikuWorld
 			if (note.layer >= index)
 				note.layer -= 1;
 		}
-		for (size_t i = index; i < context.score.layers.size(); i++)
+		// The hi-speeds of the merged layer move to the layer before it. One that is at the same
+		// tick as one already there is the same one (see canLayerMerge), so it is dropped
+		std::set<tick_t> mergedInto;
+		for (const auto& [id, hispeed] : context.score.hiSpeedChanges)
+			if (hispeed.layer == index - 1)
+				mergedInto.insert(hispeed.tick);
+		for (auto it = context.score.hiSpeedChanges.begin();
+		     it != context.score.hiSpeedChanges.end();)
 		{
-			for (auto&& [_, hispeed] : context.score.layers[i].hiSpeedChanges)
+			HiSpeed& hispeed = it->second;
+			if (hispeed.layer == index)
+			{
+				if (mergedInto.count(hispeed.tick))
+				{
+					it = context.score.hiSpeedChanges.erase(it);
+					continue;
+				}
+				hispeed.layer = index - 1;
+			}
+			else if (hispeed.layer > index)
 				hispeed.layer -= 1;
+			++it;
 		}
-		auto& sourceHSC = context.score.layers[index - 1].hiSpeedChanges;
-		auto& targetHSC = context.score.layers[index].hiSpeedChanges;
-		sourceHSC.merge(targetHSC);
+		// Rebuild hispeed view
+		context.hispeedOrderedView.clear();
+		for (auto&& [ID, hispeed] : context.score.hiSpeedChanges)
+			context.hispeedOrderedView.emplace(layered_tick_t{ hispeed.layer, hispeed.tick },
+			                                   &hispeed);
+
 		if (context.selectedLayer >= index)
 			context.selectedLayer -= 1;
 		context.score.layers.erase(context.score.layers.begin() + index);
@@ -2441,12 +2472,14 @@ namespace MikuMikuWorld
 				else if (note.layer > index && note.layer <= index + offset)
 					note.layer -= 1;
 			}
-			auto begin = layers.begin() + index, mid = begin + 1, end = begin + offset + 1;
-			for (auto it = mid; it != end; it++)
-				for (auto&& [_, hispeed] : it->hiSpeedChanges)
+			for (auto& [_, hispeed] : context.score.hiSpeedChanges)
+			{
+				if (hispeed.layer == index)
+					hispeed.layer += offset;
+				else if (hispeed.layer > index && hispeed.layer <= index + offset)
 					hispeed.layer -= 1;
-			for (auto&& [_, hispeed] : begin->hiSpeedChanges)
-				hispeed.layer += offset;
+			}
+			auto begin = layers.begin() + index, mid = begin + 1, end = begin + offset + 1;
 			std::rotate(begin, mid, end);
 		}
 		else
@@ -2458,15 +2491,22 @@ namespace MikuMikuWorld
 				else if (note.layer < index && note.layer >= index + offset)
 					note.layer += 1;
 			}
+			for (auto& [_, hispeed] : context.score.hiSpeedChanges)
+			{
+				if (hispeed.layer == index)
+					hispeed.layer += offset;
+				else if (hispeed.layer < index && hispeed.layer >= index + offset)
+					hispeed.layer += 1;
+			}
 			auto begin = layers.rbegin() + (layers.size() - index - 1), mid = begin + 1,
 			     end = mid + std::abs(offset);
-			for (auto it = mid; it != end; it++)
-				for (auto&& [_, hispeed] : it->hiSpeedChanges)
-					hispeed.layer += 1;
-			for (auto&& [_, hispeed] : begin->hiSpeedChanges)
-				hispeed.layer += offset;
 			std::rotate(begin, mid, end);
 		}
+		// Rebuild hispeed view
+		context.hispeedOrderedView.clear();
+		for (auto&& [ID, hispeed] : context.score.hiSpeedChanges)
+			context.hispeedOrderedView.emplace(layered_tick_t{ hispeed.layer, hispeed.tick },
+			                                   &hispeed);
 		if (index == context.selectedLayer)
 			context.selectedLayer += offset;
 		context.pushLayersEdit(localize(Text::layerChangeOrder), std::move(before));
@@ -2484,10 +2524,18 @@ namespace MikuMikuWorld
 			else if (note.layer == newIndex)
 				note.layer = index;
 		}
-		for (auto&& [_, hispeed] : context.score.layers[index].hiSpeedChanges)
-			hispeed.layer = newIndex;
-		for (auto&& [_, hispeed] : context.score.layers[newIndex].hiSpeedChanges)
-			hispeed.layer = index;
+		for (auto& [_, hispeed] : context.score.hiSpeedChanges)
+		{
+			if (hispeed.layer == index)
+				hispeed.layer = newIndex;
+			else if (hispeed.layer == newIndex)
+				hispeed.layer = index;
+		}
+		// Rebuild hispeed view
+		context.hispeedOrderedView.clear();
+		for (auto&& [ID, hispeed] : context.score.hiSpeedChanges)
+			context.hispeedOrderedView.emplace(layered_tick_t{ hispeed.layer, hispeed.tick },
+			                                   &hispeed);
 		std::swap(context.score.layers[index], context.score.layers[newIndex]);
 		if (index == context.selectedLayer)
 			context.selectedLayer = newIndex;

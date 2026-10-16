@@ -165,6 +165,15 @@ namespace MikuMikuWorld
 		return std::string_view(source).substr(offset, toMatch.size()) == toMatch;
 	}
 
+	template <typename Cont, typename T, typename FGetOrder>
+	inline void remapToSortedVector(const Cont& map, std::vector<const T*>& vec, FGetOrder f)
+	{
+		vec.reserve(vec.size() + map.size());
+		std::transform(map.begin(), map.end(), std::back_inserter(vec),
+		               [](const auto& kv) { return &kv.second; });
+		std::sort(vec.begin(), vec.end(), [&](const T* a, const T* b) { return f(a) < f(b); });
+	}
+
 #pragma endregion
 
 #pragma region PysekaiEngine
@@ -182,11 +191,8 @@ namespace MikuMikuWorld
 			return entity.name;
 		};
 		levelData.bgmOffset = toBgmOffset(metadata.musicOffset);
-		size_t hispeedCount = std::accumulate(score.layers.begin(), score.layers.end(), size_t(0),
-		                                      [](size_t count, const Layer& l)
-		                                      { return count + l.hiSpeedChanges.size(); });
-		levelData.entities.reserve(score.layers.size() + hispeedCount + score.tempoChanges.size() +
-		                           score.notes.size() * 2);
+		levelData.entities.reserve(score.layers.size() + score.hiSpeedChanges.size() +
+		                           score.tempoChanges.size() + score.notes.size() * 2);
 		auto& initEntity = levelData.entities.emplace_back("Initialization");
 		initEntity.data["initialLife"] = metadata.baseLifePoint;
 
@@ -201,12 +207,23 @@ namespace MikuMikuWorld
 			levelData.entities.emplace_back(toGroupEntity(layer));
 		}
 
+		// Leveldata is sensitive to entity ordering, we must sort before inserting them
+		std::vector<const HiSpeed*> sortedSpeeds;
+		remapToSortedVector(score.hiSpeedChanges, sortedSpeeds, [](const HiSpeed* hs)
+		                    { return std::make_tuple(hs->tick, hs->layer, hs->ID); });
+
+		auto speedIt = sortedSpeeds.begin();
 		for (size_t i = 0; i < score.layers.size(); ++i)
 		{
 			size_t groupIdx = groupEntIdx[i];
 			size_t lastSpeedIndex = groupIdx;
-			for (const auto& [_, speed] : score.layers[i].hiSpeedChanges)
+			// Hi-speeds of a layer that does not exist are not written
+			while (speedIt != sortedSpeeds.end() && (*speedIt)->layer < static_cast<id_t>(i))
+				++speedIt;
+			for (; speedIt != sortedSpeeds.end() && (*speedIt)->layer == static_cast<id_t>(i);
+			     ++speedIt)
 			{
+				const HiSpeed& speed = **speedIt;
 				size_t newSpeedIdx = levelData.entities.size();
 				auto& newSpeedEnt = levelData.entities.emplace_back(
 				    toTimeScaleEntity(speed, getEntityName(groupIdx)));
@@ -232,19 +249,17 @@ namespace MikuMikuWorld
 			levelData.entities.emplace_back(feverStart);
 		}
 
-		std::map<id_t, const Note*> sortedNotes;
-		std::transform(score.notes.begin(), score.notes.end(),
-		               std::inserter(sortedNotes, sortedNotes.end()),
-		               [](const std::pair<const id_t, Note>& p)
-		               { return std::make_pair(p.first, &p.second); });
-		std::map<id_t, const HoldNote*> sortedHolds;
-		std::transform(score.holdNotes.begin(), score.holdNotes.end(),
-		               std::inserter(sortedHolds, sortedHolds.end()),
-		               [](const std::pair<const id_t, HoldNote>& p)
-		               { return std::make_pair(p.first, &p.second); });
+		std::vector<const Note*> sortedNotes;
+		auto noteTuple = [](const Note* n)
+		{ return std::make_tuple(n->tick, n->layer, n->lane, n->width, n->type, n->ID); };
+		remapToSortedVector(score.notes, sortedNotes, noteTuple);
+		std::vector<const HoldNote*> sortedHolds;
+		// sort by the first note of the hold
+		remapToSortedVector(score.holdNotes, sortedHolds, [&](const HoldNote* h)
+		                    { return noteTuple(&score.notes.at(h->steps.front())); });
 
 		std::multimap<TickType, size_t> simBuilder;
-		for (const auto& [id, pnote] : sortedNotes)
+		for (const auto& pnote : sortedNotes)
 		{
 			const Note& note = *pnote;
 			if (note.isHold())
@@ -261,7 +276,7 @@ namespace MikuMikuWorld
 			bool isJoint, isSeparator, isActiveHead, isActiveTail, isActive, isActiveCombo;
 		};
 		std::vector<StepEntityInfo> stepEntities;
-		for (const auto& [id, phold] : sortedHolds)
+		for (const auto& phold : sortedHolds)
 		{
 			const HoldNote& hold = *phold;
 			stepEntities.clear();
@@ -484,6 +499,9 @@ namespace MikuMikuWorld
 			score.tempoChanges.emplace(0, Tempo{});
 
 		score.layers.clear();
+		score.hiSpeedChanges.clear();
+		id_t nextHiSpeedID = 0;
+		std::set<layered_tick_t> occupiedHispeed;
 		std::unordered_map<RefType, size_t> groupNameMap;
 		for (const auto& groupEntity : levelData.entities)
 		{
@@ -491,9 +509,8 @@ namespace MikuMikuWorld
 				continue;
 
 			size_t layerIdx = score.layers.size();
-			Layer& layer = score.layers.emplace_back(
-			    id_t(layerIdx), layerIdx ? "#" + std::to_string(layerIdx) : "default");
-			layer.hiSpeedChanges.clear();
+			Layer& layer =
+			    score.layers.emplace_back(layerIdx ? "#" + std::to_string(layerIdx) : "default");
 			if (!fromGroupEntity(groupEntity, layer))
 			{
 				errorCount++;
@@ -521,7 +538,12 @@ namespace MikuMikuWorld
 					continue;
 				}
 				hispeed.layer = layerIdx;
-				layer.hiSpeedChanges.emplace(hispeed.tick, hispeed);
+				// Discard duplicate hispeeds occupying the same tick on a layer
+				if (occupiedHispeed.insert({ hispeed.layer, hispeed.tick }).second)
+				{
+					hispeed.ID = nextHiSpeedID++;
+					score.hiSpeedChanges.emplace(hispeed.ID, hispeed);
+				}
 
 				nextSpeedChange.clear();
 				levelData.entities[it->second].tryGetDataValue("next", nextSpeedChange);
@@ -717,7 +739,8 @@ namespace MikuMikuWorld
 			       { "#TIMESCALE_SKIP", hispeed.skips },
 			       { "#TIMESCALE_EASE", static_cast<IntegerType>(hispeed.ease) },
 			       { "#TIMESCALE_GROUP", groupName },
-			       { "hideNotes", static_cast<IntegerType>(hispeed.hideNotes) } } };
+			       { "hideNotes", static_cast<IntegerType>(hispeed.hideNotes) },
+			       { "editorLane", toSonolusLane(-hispeed.layer, 0) } } };
 	}
 
 	Sonolus::LevelDataEntity PySekaiEngine::toSkillEntity(const Skill& skill)

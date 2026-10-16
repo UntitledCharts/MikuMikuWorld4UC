@@ -2,6 +2,8 @@
 #include <set>
 #include <vector>
 #include <map>
+#include <unordered_map>
+#include <unordered_set>
 #include "Constants.h"
 #include "NoteTypes.h"
 
@@ -57,13 +59,15 @@ namespace MikuMikuWorld
 	{
 		tick_t tick = 0;
 		id_t layer = 0;
+		id_t ID = -1;
 		float speed = 1.0f;
 		float skips = 0.0f;
 		HiSpeedEaseType ease = HiSpeedEaseType::None;
 		bool hideNotes = false;
 	};
-	using HiSpeedCollection = std::map<tick_t, HiSpeed>;
-	using HiSpeedRefCollection = std::set<layered_tick_t>;
+	using HiSpeedCollection = std::unordered_map<id_t, HiSpeed>;
+	using HiSpeedRefCollection = std::unordered_set<id_t>;
+	using HiSpeedOrderedCollection = std::multimap<layered_tick_t, HiSpeed*>;
 
 	// This is purely a helper and should not be use as a comparator
 	bool isSame(const HiSpeed&, const HiSpeed&);

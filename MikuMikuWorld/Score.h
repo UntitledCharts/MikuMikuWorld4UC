@@ -15,16 +15,10 @@ namespace MikuMikuWorld
 		std::string name;
 		float forceNoteSpeed = 0.0f;
 		bool hidden = false;
-		HiSpeedCollection hiSpeedChanges;
 
 		Layer(std::string_view name, float forceNoteSpeed = 0.0f)
 		    : name(name), forceNoteSpeed(forceNoteSpeed)
 		{
-		}
-		Layer(id_t id, std::string_view name, float forceNoteSpeed = 0.0f)
-		    : name(name), forceNoteSpeed(forceNoteSpeed)
-		{
-			hiSpeedChanges.emplace(0, HiSpeed{ 0, id });
 		}
 	};
 	using LayerCollection = std::vector<Layer>;
@@ -61,6 +55,7 @@ namespace MikuMikuWorld
 		Fever fever;
 
 		LayerCollection layers{ Layer{ "default", 0 } };
+		HiSpeedCollection hiSpeedChanges{ { 0, { 0, 0, 0 } } };
 		WaypointCollection waypoints;
 	};
 

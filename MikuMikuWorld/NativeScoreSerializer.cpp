@@ -255,6 +255,8 @@ namespace MikuMikuWorld
 		if (version.supportHispeed())
 		{
 			int hiSpeedCount = reader.readUInt32();
+			id_t nextHiSpeedID = 0;
+			std::set<layered_tick_t> occupied;
 			for (int i = 0; i < hiSpeedCount; ++i)
 			{
 				int tick = std::max((int)reader.readUInt32(), 0);
@@ -265,14 +267,15 @@ namespace MikuMikuWorld
 				    version.supportHispeedSkipEase() ? reader.readUInt16() : 0);
 				bool hideNotes = version.supportHispeedSkipEase() ? reader.readUInt16() : false;
 
-				HiSpeedCollection& hispeeds = score.layers.at(layer).hiSpeedChanges;
-				auto it = hispeeds.find(tick);
-				while (it != hispeeds.end())
-				{
+				// The layer doesn't exist, dropping the hispeed
+				if (!isArrayIndexInBounds(layer, score.layers))
+					continue;
+				// Hi-speeds on the same tick are moved to the next free ticks
+				while (occupied.count({ layer, tick }))
 					++tick;
-					it = hispeeds.find(tick);
-				}
-				hispeeds[tick] = { tick, layer, speed, skip, ease, hideNotes };
+				occupied.insert({ layer, tick });
+				HiSpeed hispeed{ tick, layer, nextHiSpeedID++, speed, skip, ease, hideNotes };
+				score.hiSpeedChanges.emplace(hispeed.ID, hispeed);
 			}
 		}
 
@@ -312,21 +315,15 @@ namespace MikuMikuWorld
 			writer.writeSingle(tempo.quarterPerMinute);
 		}
 
-		size_t hispeedCount = std::accumulate(score.layers.begin(), score.layers.end(), size_t(0),
-		                                      [](size_t count, const Layer& l)
-		                                      { return count + l.hiSpeedChanges.size(); });
-		writer.writeInt32((int)hispeedCount);
-		for (int i = 0; i < score.layers.size(); ++i)
+		writer.writeInt32((int)score.hiSpeedChanges.size());
+		for (const auto& [_, hiSpeed] : score.hiSpeedChanges)
 		{
-			for (const auto& [_, hiSpeed] : score.layers[i].hiSpeedChanges)
-			{
-				writer.writeInt32(hiSpeed.tick);
-				writer.writeSingle(hiSpeed.speed);
-				writer.writeInt32(hiSpeed.layer);
-				writer.writeSingle(hiSpeed.skips);
-				writer.writeInt16(static_cast<int>(hiSpeed.ease));
-				writer.writeInt16(hiSpeed.hideNotes);
-			}
+			writer.writeInt32(hiSpeed.tick);
+			writer.writeSingle(hiSpeed.speed);
+			writer.writeInt32(hiSpeed.layer);
+			writer.writeSingle(hiSpeed.skips);
+			writer.writeInt16(static_cast<int>(hiSpeed.ease));
+			writer.writeInt16(hiSpeed.hideNotes);
 		}
 
 		writer.writeInt32(score.skills.size());
@@ -765,11 +762,18 @@ namespace MikuMikuWorld
 			writer.writeSingle(tempo.quarterPerMinute);
 		}
 
-		writer.writeInt32(score.layers.front().hiSpeedChanges.size());
-		for (const auto& [_, hiSpeed] : score.layers.front().hiSpeedChanges)
+		// Legacy depend on sorted hispeed
+		std::vector<const HiSpeed*> hiSpeeds;
+		for (const auto& [_, hispeed] : score.hiSpeedChanges)
+			if (hispeed.layer == 0)
+				hiSpeeds.push_back(&hispeed);
+		std::sort(hiSpeeds.begin(), hiSpeeds.end(),
+		          [](const HiSpeed* a, const HiSpeed* b) { return a->tick < b->tick; });
+		writer.writeInt32(hiSpeeds.size());
+		for (const HiSpeed* hiSpeed : hiSpeeds)
 		{
-			writer.writeInt32(hiSpeed.tick);
-			writer.writeSingle(hiSpeed.speed);
+			writer.writeInt32(hiSpeed->tick);
+			writer.writeSingle(hiSpeed->speed);
 		}
 
 		writer.writeInt32(score.skills.size());

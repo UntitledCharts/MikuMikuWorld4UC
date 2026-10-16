@@ -2,6 +2,8 @@
 #include "Constants.h"
 #include "Score.h"
 #include <algorithm>
+#include <memory>
+#include <stdexcept>
 
 namespace MikuMikuWorld
 {
@@ -173,25 +175,113 @@ namespace MikuMikuWorld
 		return std::prev(score.tempoChanges.upper_bound(tick))->second;
 	}
 
-	HiSpeed* getHiSpeedAt(Score& score, tick_t tick, id_t layer)
+	float getEasedSpeed(tick_t startTick, tick_t endTick, float startSpeed, float endSpeed,
+	                    tick_t currentTick, HiSpeedEaseType ease)
 	{
-		auto& currentHispeedChanges = score.layers[layer].hiSpeedChanges;
-		if (currentHispeedChanges.empty())
-			return nullptr;
-		auto it = currentHispeedChanges.upper_bound(tick);
-		if (it == currentHispeedChanges.begin())
-			return nullptr;
-		return &std::prev(it)->second;
+		switch (ease)
+		{
+		case HiSpeedEaseType::None:
+			return startSpeed;
+		case HiSpeedEaseType::Linear:
+			return lerp(startSpeed, endSpeed, unlerp(startTick, endTick, currentTick));
+		default:
+			assert(false && "EaseType not supported!");
+			return 0.0f;
+		}
 	}
 
-	bool insertTempoChange(TempoCollection& collection, const Tempo& tempo)
+	float getScaledTick(tick_t startTick, tick_t endTick, float startSpeed, float endSpeed,
+	                    HiSpeedEaseType ease, tick_t fromTick, tick_t toTick)
 	{
-		return collection.try_emplace(tempo.tick, tempo).second;
+		if (fromTick < 0)
+			fromTick = startTick;
+		if (toTick < 0)
+			toTick = endTick;
+		if (endTick < startTick || fromTick < startTick || toTick > endTick)
+			throw std::out_of_range("Argument out of range!");
+		switch (ease)
+		{
+		case HiSpeedEaseType::None:
+			return (toTick - fromTick) * startSpeed;
+		case HiSpeedEaseType::Linear:
+		{
+			// Solve for ax+b
+			float a = (endSpeed - startSpeed) / (endTick - startTick);
+			float b = endSpeed - endTick * a;
+			// Substitute for integral
+			auto f_int = [=](float x) { return a / 2 * std::pow(x, 2) + b * x; };
+			return f_int(toTick) - f_int(fromTick);
+		}
+		default:
+			assert(false && "EaseType not supported!");
+			return 0.0f;
+		}
+	}
+
+	template <typename hs_t>
+	static float impl_accumulateScaledTick(tick_t tick, id_t layer, const HiSpeedCollection& hs,
+	                                       std::multimap<layered_tick_t, hs_t*> ordHs,
+	                                       tick_t fromTick)
+	{
+		float totalTicks = 0.0f;
+		tick_t lastTick = 0, baseTick = fromTick;
+		float lastSpeed = 1.0f;
+		HiSpeedEaseType ease = HiSpeedEaseType::None;
+		auto it = ordHs.upper_bound({ layer, fromTick }), end = ordHs.lower_bound({ layer, tick });
+		if (it != ordHs.begin())
+		{
+			const HiSpeed& currHspd = *std::prev(it)->second;
+			ease = currHspd.ease;
+			lastTick = currHspd.tick;
+			lastSpeed = currHspd.speed;
+		}
+		for (; it != end; ++it)
+		{
+			const HiSpeed& nextHspd = *it->second;
+			if (lastTick < nextHspd.tick)
+			{
+				totalTicks += getScaledTick(lastTick, nextHspd.tick, lastSpeed, nextHspd.speed,
+				                            ease, baseTick);
+			}
+
+			baseTick = lastTick = nextHspd.tick;
+			lastSpeed = nextHspd.speed;
+			ease = nextHspd.ease;
+		}
+		if (it != ordHs.end() && it->first.first == layer)
+		{
+			totalTicks += getScaledTick(lastTick, it->second->tick, lastSpeed, it->second->speed,
+			                            ease, baseTick, tick);
+		}
+		else
+		{
+			// No next hispeed in the current layer, no ease
+			totalTicks +=
+			    getScaledTick(lastTick, tick, lastSpeed, -1, HiSpeedEaseType::None, baseTick);
+		}
+		return totalTicks;
+	}
+
+	float accumulateScaledTick(tick_t tick, id_t layer, const HiSpeedCollection& hs,
+	                           const HiSpeedOrderedCollection* ordHs, tick_t fromTick)
+	{
+		if (ordHs)
+			return impl_accumulateScaledTick(tick, layer, hs, *ordHs, fromTick);
+
+		std::multimap<layered_tick_t, const HiSpeed*> ownedHs;
+		for (auto& [_, hispeed] : hs)
+		{
+			if (hispeed.layer != layer)
+				// No need to allocate for other layers
+				continue;
+			ownedHs.emplace(layered_tick_t{ hispeed.layer, hispeed.tick }, &hispeed);
+		}
+		return impl_accumulateScaledTick(tick, layer, hs, ownedHs, fromTick);
 	}
 
 	bool isSame(const HiSpeed& a, const HiSpeed& b)
 	{
-		return a.speed == b.speed && a.ease == b.ease && a.skips == b.skips &&
-		       a.hideNotes == b.hideNotes;
+		return a.tick == b.tick && a.layer == b.layer && a.speed == b.speed && a.ease == b.ease &&
+		       a.skips == b.skips && a.hideNotes == b.hideNotes;
 	}
 }

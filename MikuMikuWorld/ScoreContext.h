@@ -80,7 +80,7 @@ namespace MikuMikuWorld
 	struct PasteData : public NotesContext
 	{
 		NoteOrderedCollection notesOrderedView;
-		HiSpeedCollection hiSpeedChanges;
+		std::vector<HiSpeed> hiSpeedChanges;
 		bool pasting{ false };
 
 		float width{};
@@ -151,6 +151,7 @@ namespace MikuMikuWorld
 		int recentHistoryUndo = 0;
 		id_t nextNoteID = 0;
 		id_t nextHoldID = 0;
+		id_t nextHiSpeedID = 0;
 
 		id_t selectedLayer = 0;
 		ScoreSelection selection;
@@ -161,6 +162,7 @@ namespace MikuMikuWorld
 		std::vector<Note*> hoveringNotes;
 		NoteOrderedCollection notesOrderedView; // fast lookup
 		WaypointOrderedCollection waypointOrderedView;
+		HiSpeedOrderedCollection hispeedOrderedView;
 
 		float minNoteWidth() const noexcept;
 		float maxNoteWidth() const noexcept;
@@ -277,7 +279,12 @@ namespace MikuMikuWorld
 		std::pair<id_t, id_t> splitHoldAt(HoldNote& hold, size_t index, bool update = true);
 		void insertTempoChange(const Tempo& tempo);
 		void insertTimeSignature(const TimeSignature& timeSig);
+		HiSpeed* getHispeedAt(id_t layer, tick_t tick);
+		HiSpeed* getHispeedAtOrBeforeTick(id_t layer, tick_t tick);
+		HiSpeed* getHispeedAtOrAfterTick(id_t layer, tick_t tick);
 		HiSpeed& insertHispeedChange(const HiSpeed& hispeed, bool update = true);
+		// (see eraseNote)
+		void eraseHispeedChange(HiSpeed& hispeed, bool update = true);
 		Waypoint& insertWaypoint(tick_t tick, const std::string& name);
 		void eraseWaypoint(id_t waypointID);
 		void insertSkill(tick_t tick);
@@ -290,6 +297,7 @@ namespace MikuMikuWorld
 		bool isLayerSelected(id_t layer) const;
 
 	  private:
+		  // Helpers 
 		void updateSelectionCapture();
 		void assertNoteSelection();
 		void onHistoryPushed(bool invalidateCapture = true);

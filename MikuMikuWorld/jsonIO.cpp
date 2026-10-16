@@ -778,14 +778,21 @@ namespace MikuMikuWorld
 			const Note& end = **stepIt;
 			terminal_step_note_to_json(holdEnd, end, *holdStep, -baseTick);
 		}
-		for (auto&& [layer, tick] : selection.hispeeds)
+		std::set<tick_t> occupiedTicks;
+		for (auto&& hispeedID : selection.hispeeds)
 		{
+			const HiSpeed& hispeed = score.hiSpeedChanges.at(hispeedID);
+			if (hispeed.layer == currentLayer)
+				occupiedTicks.insert(hispeed.tick);
+		}
+		for (auto&& hispeedID : selection.hispeeds)
+		{
+			const HiSpeed& hispeed = score.hiSpeedChanges.at(hispeedID);
 			// If 2 hispeeds at the same tick are selected,
 			// always prioritise the one in the current layer
-			if (layer != currentLayer && selection.hispeeds.count({ currentLayer, tick }))
+			if (hispeed.layer != currentLayer && occupiedTicks.count(hispeed.tick))
 				continue;
-			hispeed_to_json(hiSpeedChanges.emplace_back(),
-			                score.layers[layer].hiSpeedChanges.at(tick), -baseTick);
+			hispeed_to_json(hiSpeedChanges.emplace_back(), hispeed, -baseTick);
 		}
 	}
 
@@ -915,14 +922,18 @@ namespace MikuMikuWorld
 
 		if (arrayHasData(data, "hiSpeedChanges"))
 		{
+			std::map<tick_t, HiSpeed> hispeeds;
 			for (const auto& entry : data["hiSpeedChanges"])
 			{
 				if (!keyExists(entry, "tick"))
 					continue;
 				HiSpeed hispeed;
 				hispeed_from_json(entry, hispeed);
-				pasteData.hiSpeedChanges[hispeed.tick] = hispeed;
+				// Replace if there's already one in the same tick
+				hispeeds[hispeed.tick] = hispeed;
 			}
+			for (const auto& [tick, hispeed] : hispeeds)
+				pasteData.hiSpeedChanges.push_back(hispeed);
 		}
 
 		pasteData.pasting =

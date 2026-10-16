@@ -26,6 +26,7 @@ namespace MikuMikuWorld
 			windowName.append(std::to_string(windowID));
 
 		context.audio = std::make_unique<Audio::AudioContext>(manager);
+		onScoreLoad();
 	}
 
 	static std::string createTitleName(const std::string& name)
@@ -330,26 +331,24 @@ namespace MikuMikuWorld
 				float middlebound = toLanePos(hispeedExPanelStartX);
 				if (startLane < middlebound && endLane > lowerbound)
 				{
-					const auto& hispeedChanges =
-					    context.score.layers[context.selectedLayer].hiSpeedChanges;
-					for (auto hscIt = hispeedChanges.lower_bound(startTick),
-					          hscEnd = hispeedChanges.upper_bound(endTick);
-					     hscIt != hscEnd; ++hscIt)
-						context.selection.hispeeds.insert(
-						    { hscIt->second.layer, hscIt->second.tick });
+					auto it = context.hispeedOrderedView.lower_bound(
+					         { context.selectedLayer, startTick }),
+					     end = context.hispeedOrderedView.upper_bound(
+					         { context.selectedLayer, endTick });
+					for (; it != end; ++it)
+						context.selectHiSpeed(*it->second);
 				}
 				if (context.showAllLayers && startLane < toLanePos(maxScreenPos.x) &&
 				    endLane > middlebound)
 				{
-					for (auto&& layer : context.score.layers)
+					for (id_t layer = 0; layer < context.score.layers.size(); ++layer)
 					{
-						if (layer.hidden || &layer == &context.score.layers[context.selectedLayer])
+						if (context.score.layers[layer].hidden || layer == context.selectedLayer)
 							continue;
-						for (auto hscIt = layer.hiSpeedChanges.lower_bound(startTick),
-						          hscEnd = layer.hiSpeedChanges.upper_bound(endTick);
-						     hscIt != hscEnd; ++hscIt)
-							context.selection.hispeeds.insert(
-							    { hscIt->second.layer, hscIt->second.tick });
+						auto it = context.hispeedOrderedView.lower_bound({ layer, startTick }),
+						     end = context.hispeedOrderedView.upper_bound({ layer, endTick });
+						for (; it != end; ++it)
+							context.selectHiSpeed(*it->second);
 					}
 				}
 			}
@@ -1800,11 +1799,17 @@ namespace MikuMikuWorld
 
 	HiSpeed ScoreEditorTimeline::getPreviewHispeed(const EditArgs& edit) const
 	{
-		if (!context.metadata.isExtendedScore)
-			return HiSpeed{ snapTick, -1, edit.hiSpeed };
-		return HiSpeed{ snapTick,         -1,
-			            edit.hiSpeed,     edit.hiSpeedSkip,
-			            edit.hiSpeedEase, edit.hiSpeedHideNotes };
+		HiSpeed hispeed;
+		hispeed.layer = -1;
+		hispeed.tick = snapTick;
+		hispeed.speed = edit.hiSpeed;
+		if (context.metadata.isExtendedScore)
+		{
+			hispeed.skips = edit.hiSpeedSkip;
+			hispeed.ease = edit.hiSpeedEase;
+			hispeed.hideNotes = edit.hiSpeedHideNotes;
+		}
+		return hispeed;
 	}
 
 	void ScoreEditorTimeline::updateTimelineOffset()
@@ -2130,26 +2135,14 @@ namespace MikuMikuWorld
 		const Tempo& tempo = getTempoAt(context.score, currentTick);
 		float bpm = tempo.quarterPerMinute / quatersPerMeasure(ts) * beatsPerMeasure(ts);
 		float speed = 1.0f;
-		auto& currentHispeedChanges = context.score.layers[context.selectedLayer].hiSpeedChanges;
-		auto speedIt = currentHispeedChanges.upper_bound(currentTick);
-		if (speedIt != currentHispeedChanges.begin())
-		{
-			const HiSpeed& hiSpeed = std::prev(speedIt)->second;
-			switch (hiSpeed.ease)
-			{
-			default:
-			case HiSpeedEaseType::None:
-				speed = hiSpeed.speed;
-				break;
-			case HiSpeedEaseType::Linear:
-				if (speedIt != currentHispeedChanges.end())
-				{
-					const HiSpeed& nxHiSpeed = speedIt->second;
-					speed = lerp(hiSpeed.speed, nxHiSpeed.speed,
-					             unlerp(hiSpeed.tick, nxHiSpeed.tick, currentTick));
-				}
-			}
-		}
+		HiSpeed* hispeed = context.getHispeedAtOrBeforeTick(context.selectedLayer, currentTick);
+		HiSpeed* hispeedAfter = context.getHispeedAtOrAfterTick(context.selectedLayer, currentTick);
+		if (hispeed && hispeedAfter &&
+		    isWithinRange(currentTick, hispeed->tick, hispeedAfter->tick))
+			speed = getEasedSpeed(hispeed->tick, hispeedAfter->tick, hispeed->speed,
+			                      hispeedAfter->speed, currentTick, hispeed->ease);
+		else if (hispeed)
+			speed = hispeed->speed;
 
 		float time, ms = std::modf(curTime, &time) * 100;
 		div_t timeDiv = std::div(int(time), 60);
@@ -2878,12 +2871,13 @@ namespace MikuMikuWorld
 			{
 				if (!context.isLayerVisible(l) || context.isLayerSelected(l))
 					continue;
-				const auto& hispeedChanges = context.score.layers[l].hiSpeedChanges;
-				auto hispdIt = std::reverse_iterator(hispeedChanges.upper_bound(endTick));
-				auto hispdEnd = std::reverse_iterator(hispeedChanges.lower_bound(startTick));
+				auto hispdIt = std::reverse_iterator(
+				    context.hispeedOrderedView.upper_bound({ static_cast<id_t>(l), endTick }));
+				auto hispdEnd = std::reverse_iterator(
+				    context.hispeedOrderedView.lower_bound({ static_cast<id_t>(l), startTick }));
 				for (; hispdIt != hispdEnd; ++hispdIt)
 				{
-					const HiSpeed& hispeed = hispdIt->second;
+					const HiSpeed& hispeed = *hispdIt->second;
 					hiSpeedControl(drawList, hispeed, context.selection.has(hispeed), false);
 				}
 			}
@@ -2891,31 +2885,39 @@ namespace MikuMikuWorld
 			ImGui::TableSetColumnIndex(2);
 			hispeedPanelStartX = ImGui::GetCursorScreenPos().x;
 			ImGui::Dummy({ UI::scale(25), 1 }); // Padding in case the column is empty
-			const auto& hispeedChanges = context.score.layers[context.selectedLayer].hiSpeedChanges;
-			auto hispdIt = std::reverse_iterator(hispeedChanges.upper_bound(endTick));
-			auto hispdEnd = std::reverse_iterator(hispeedChanges.lower_bound(startTick));
-			auto hispdMouse = hispeedChanges.rend();
+			auto hispdIt = std::reverse_iterator(
+			    context.hispeedOrderedView.upper_bound({ context.selectedLayer, endTick }));
+			auto hispdEnd = std::reverse_iterator(
+			    context.hispeedOrderedView.lower_bound({ context.selectedLayer, startTick }));
+			// The hovered one is the last hi-speed before the mouse
+			HiSpeed* hispdMouse = nullptr;
 			if (ImGui::GetCurrentTable()->HoveredColumnBody == 2)
-				hispdMouse = std::reverse_iterator(hispeedChanges.lower_bound(mouseTick));
+			{
+				auto mouseIt =
+				    context.hispeedOrderedView.lower_bound({ context.selectedLayer, mouseTick });
+				if (mouseIt != context.hispeedOrderedView.begin() &&
+				    std::prev(mouseIt)->first.first == context.selectedLayer)
+					hispdMouse = std::prev(mouseIt)->second;
+			}
 			for (; hispdIt != hispdEnd; ++hispdIt)
 			{
-				if (hispdIt == hispdMouse)
+				const HiSpeed& hispeed = *hispdIt->second;
+				if (&hispeed == hispdMouse)
 					continue;
-				const HiSpeed& hispeed = hispdIt->second;
 				if (hiSpeedControl(drawList, hispeed, context.selection.has(hispeed), eventEnabled))
 					openEvent(hispeed);
 			}
 
-			if (hispdMouse != hispeedChanges.rend() &&
-			    hiSpeedControl(drawList, hispdMouse->second,
-			                   context.selection.has(hispdMouse->second), eventEnabled))
+			if (hispdMouse != nullptr &&
+			    hiSpeedControl(drawList, *hispdMouse, context.selection.has(*hispdMouse),
+			                   eventEnabled))
 			{
 				if (io.KeyCtrl)
-					context.selectHiSpeed(hispdMouse->second);
+					context.selectHiSpeed(*hispdMouse);
 				else if (io.KeyAlt)
-					context.deselectHiSpeed(hispdMouse->second);
+					context.deselectHiSpeed(*hispdMouse);
 				else
-					openEvent(hispdMouse->second);
+					openEvent(*hispdMouse);
 			}
 			if (previewEvent && edit.insertMode == InsertMode::InsertHiSpeed)
 			{
@@ -2929,7 +2931,7 @@ namespace MikuMikuWorld
 			{
 				ImGui::TableSetColumnIndex(2);
 				ImGui::PushID("paste");
-				for (const auto& [_, hs] : pasteData.hiSpeedChanges)
+				for (const HiSpeed& hs : pasteData.hiSpeedChanges)
 				{
 					HiSpeed hispeed = hs;
 					hispeed.layer = -1;
@@ -3392,16 +3394,8 @@ namespace MikuMikuWorld
 			{
 				if (syncEdit)
 				{
-					if (!isArrayIndexInBounds(hispeed->layer, context.score.layers))
-					{
-						ImGui::CloseCurrentPopup();
-						ImGui::EndPopup();
-						return;
-					}
-					const HiSpeedCollection& collection =
-					    context.score.layers[hispeed->layer].hiSpeedChanges;
-					auto it = collection.find(hispeed->tick);
-					if (it == collection.end())
+					auto it = context.score.hiSpeedChanges.find(hispeed->ID);
+					if (it == context.score.hiSpeedChanges.end())
 					{
 						ImGui::CloseCurrentPopup();
 						ImGui::EndPopup();
@@ -3429,15 +3423,8 @@ namespace MikuMikuWorld
 				}
 				if (eventEdited)
 				{
-					if (!isArrayIndexInBounds(hispeed->layer, context.score.layers))
-					{
-						ImGui::CloseCurrentPopup();
-						ImGui::EndPopup();
-						return;
-					}
-					auto& hispeedChanges = context.score.layers[hispeed->layer].hiSpeedChanges;
-					auto hispeedIt = hispeedChanges.find(hispeed->tick);
-					if (hispeedIt == hispeedChanges.end())
+					auto hispeedIt = context.score.hiSpeedChanges.find(hispeed->ID);
+					if (hispeedIt == context.score.hiSpeedChanges.end())
 					{
 						ImGui::CloseCurrentPopup();
 						ImGui::EndPopup();
@@ -3450,9 +3437,8 @@ namespace MikuMikuWorld
 					hspd.ease = hispeed->ease;
 					hspd.hideNotes = hispeed->hideNotes;
 					if (!isSame(before, hspd))
-						context.pushEdit(
-						    "Change hi-speed",
-						    SingleHiSpeedEdit{ { hspd.layer, hspd.tick }, before, hspd });
+						context.pushEdit("Change hi-speed",
+						                 SingleHiSpeedEdit{ hspd.ID, before, hspd });
 					context.updateSelectionFlag();
 				}
 				UI::endPropertyTable();
@@ -3461,22 +3447,9 @@ namespace MikuMikuWorld
 				if (ImGui::Button(localize(Text::remove), ImVec2(-1, UI::btnSmall.y + 2)))
 				{
 					ImGui::CloseCurrentPopup();
-					auto& hispeedChanges = context.score.layers[hispeed->layer].hiSpeedChanges;
-					auto hispeedIt = hispeedChanges.find(hispeed->tick);
-					if (hispeedIt != hispeedChanges.end())
-					{
-						const HiSpeed before = hispeedIt->second;
-						// The selection loses the hi-speed. Undo selects it again
-						SelectionRef selectionBefore = context.getSelectionSnapshot();
-						context.deselectHiSpeed(before);
-						hispeedChanges.erase(hispeedIt);
-						context.pushEdit(
-						    "Remove hi-speed change",
-						    SingleHiSpeedEdit{ layered_tick_t{ before.layer, before.tick }, before,
-						                       std::nullopt },
-						    std::move(selectionBefore));
-						context.updateSelectionFlag();
-					}
+					auto hispeedIt = context.score.hiSpeedChanges.find(hispeed->ID);
+					if (hispeedIt != context.score.hiSpeedChanges.end())
+						context.eraseHispeedChange(hispeedIt->second);
 				}
 			}
 			else if (Waypoint* waypoint = std::get_if<Waypoint>(&eventEditArgs))
@@ -3736,21 +3709,10 @@ namespace MikuMikuWorld
 	void ScoreEditorTimeline::loadScore(Score score, ScoreMetadata metadata,
 	                                    const std::string& filename)
 	{
-		context.deselectAll();
-		context.selectedLayer = 0;
-		context.history.clear();
-		context.recentHistoryUndo = context.history.undoCount();
 		context.score = std::move(score);
 		context.metadata = context.workingMetadata = std::move(metadata);
-		context.upToDate = true;
-		context.updateViews();
-		context.scoreStats.calculateStats(context.score);
-		context.nextNoteID = std::accumulate(context.score.notes.begin(), context.score.notes.end(),
-		                                     0, [](id_t id, const std::pair<id_t, Note>& v)
-		                                     { return std::max(id, v.first + 1); });
-		context.nextHoldID = std::accumulate(
-		    context.score.holdNotes.begin(), context.score.holdNotes.end(), 0,
-		    [](id_t id, const std::pair<id_t, HoldNote>& v) { return std::max(id, v.first + 1); });
+		onScoreLoad();
+
 		if (ScoreSerializeController::toSerializeFormat(filename) == SerializeFormat::NativeFormat)
 		{
 			context.filename = filename;
@@ -3762,14 +3724,32 @@ namespace MikuMikuWorld
 			context.filename.clear();
 			setTimelineName(windowUntitled);
 		}
+	}
 
+	void ScoreEditorTimeline::onScoreLoad()
+	{
+		context.deselectAll();
+		context.selectedLayer = 0;
+		context.history.clear();
+		context.recentHistoryUndo = context.history.undoCount();
+		context.upToDate = true;
+		context.updateViews();
+		context.scoreStats.calculateStats(context.score);
+		context.nextNoteID = std::accumulate(context.score.notes.begin(), context.score.notes.end(),
+		                                     0, [](id_t id, const std::pair<id_t, Note>& v)
+		                                     { return std::max(id, v.first + 1); });
+		context.nextHoldID = std::accumulate(
+		    context.score.holdNotes.begin(), context.score.holdNotes.end(), 0,
+		    [](id_t id, const std::pair<id_t, HoldNote>& v) { return std::max(id, v.first + 1); });
+		context.nextHiSpeedID = std::accumulate(
+		    context.score.hiSpeedChanges.begin(), context.score.hiSpeedChanges.end(), 0,
+		    [](id_t id, const std::pair<id_t, HiSpeed>& v) { return std::max(id, v.first + 1); });
 		context.isPendingLoadMusic = true;
 
 		tick_t maxTick =
 		    context.notesOrderedView.size() ? context.notesOrderedView.rbegin()->second->tick : 0;
-		for (auto&& layer : context.score.layers)
-			if (layer.hiSpeedChanges.size())
-				maxTick = std::max(layer.hiSpeedChanges.rbegin()->second.tick, maxTick);
+		for (auto&& [id, hispeed] : context.score.hiSpeedChanges)
+			maxTick = std::max(hispeed.tick, maxTick);
 
 		// Current offset maybe greater than calculated offset from score
 		maxTime = std::max(maxTime, accumulateDuration(maxTick, context.score.tempoChanges));

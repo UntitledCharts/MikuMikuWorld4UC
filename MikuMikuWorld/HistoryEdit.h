@@ -27,7 +27,6 @@ namespace MikuMikuWorld
 	using SelectionRef = std::shared_ptr<const ScoreSelection>;
 	using SelectionChange = FieldChange<SelectionRef>;
 
-	// ---- Metadata ----------------------------------------------------------------------------
 	template <typename T> struct MetadataChange
 	{
 		T ScoreMetadata::* field;
@@ -45,7 +44,7 @@ namespace MikuMikuWorld
 		void redo(HistoryContext& ctx) const;
 	};
 
-	// ---- Keyed collections
+	// Keyed collections
 	// Traits provide Key, Value and `static void set(Score&, const Key&, const optional<Value>&)`
 	// which inserts/replaces the entry or erases it if the value is empty
 
@@ -110,7 +109,7 @@ namespace MikuMikuWorld
 	};
 	struct HiSpeedTraits
 	{
-		using Key = layered_tick_t;
+		using Key = id_t;
 		using Value = HiSpeed;
 		static void set(Score& score, const Key& key, const std::optional<Value>& value);
 	};
@@ -181,10 +180,12 @@ namespace MikuMikuWorld
 	};
 
 	// Created, merged, reordered, hidden and renamed in the layer window.
+	// The layer of a note or hi-speed is a property of it, so they are recorded as changes
 	struct LayerEdit
 	{
 		FieldChange<LayerCollection> layers;
 		std::vector<ChangeEntry<NoteTraits>> notes;
+		std::vector<ChangeEntry<HiSpeedTraits>> hispeeds;
 
 		void undo(HistoryContext& ctx) const;
 		void redo(HistoryContext& ctx) const;
@@ -208,7 +209,7 @@ namespace MikuMikuWorld
 		void captureNote(const NotesContext& context, id_t noteID);
 		// Captures the hold and, with steps, all of its steps
 		void captureHold(const NotesContext& context, id_t holdID, bool steps = true);
-		void captureHiSpeed(const Score& score, const layered_tick_t& key);
+		void captureHiSpeed(const Score& score, id_t id);
 		// Captures the notes and holds created by an edit, IDs are never reused
 		void captureCreated(const Score& score, id_t beforeNoteID, id_t afterNoteID,
 		                    id_t beforeHoldID, id_t afterHoldID);
@@ -235,10 +236,10 @@ namespace MikuMikuWorld
 	  private:
 		NoteCollection notes;
 		HoldNoteCollection holdNotes;
-		std::map<layered_tick_t, HiSpeed> hispeeds;
+		HiSpeedCollection hispeeds;
 	};
 
-	// What a layer edit may change: the layers and the layer of every note
+	// What a layer edit may change: the layer fields, the layer of every note and hi-speeds
 	class LayerCapture
 	{
 	  public:
@@ -249,6 +250,7 @@ namespace MikuMikuWorld
 	  private:
 		LayerCollection layers;
 		std::unordered_map<id_t, id_t> noteLayers;
+		HiSpeedCollection hispeeds;
 	};
 
 	void undoEdit(const HistoryEdit& edit, HistoryContext& ctx);

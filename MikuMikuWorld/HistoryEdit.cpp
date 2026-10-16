@@ -202,16 +202,14 @@ namespace MikuMikuWorld
 			captureNote(context, step);
 	}
 
-	void ScoreCapture::captureHiSpeed(const Score& score, const layered_tick_t& key)
+	void ScoreCapture::captureHiSpeed(const Score& score, id_t id)
 	{
-		auto&& [layer, tick] = key;
-		if (hispeeds.count(key) || !isArrayIndexInBounds(layer, score.layers))
+		if (hispeeds.count(id))
 			return;
 
-		const HiSpeedCollection& hiSpeedChanges = score.layers[layer].hiSpeedChanges;
-		auto it = hiSpeedChanges.find(tick);
-		if (it != hiSpeedChanges.end())
-			hispeeds.emplace(key, it->second);
+		auto it = score.hiSpeedChanges.find(id);
+		if (it != score.hiSpeedChanges.end())
+			hispeeds.emplace(id, it->second);
 	}
 
 	void ScoreCapture::captureCreated(const Score& score, id_t beforeNoteID, id_t afterNoteID,
@@ -281,15 +279,12 @@ namespace MikuMikuWorld
 				continue;
 			edit.holds().push_back({ id, before, it->second });
 		}
-		for (const auto& [key, before] : hispeeds)
+		for (const auto& [id, before] : hispeeds)
 		{
-			if (!isArrayIndexInBounds(key.first, score.layers))
+			auto it = score.hiSpeedChanges.find(id);
+			if (it == score.hiSpeedChanges.end() || isSame(before, it->second))
 				continue;
-			const HiSpeedCollection& hiSpeedChanges = score.layers[key.first].hiSpeedChanges;
-			auto it = hiSpeedChanges.find(key.second);
-			if (it == hiSpeedChanges.end() || isSame(before, it->second))
-				continue;
-			edit.hispeeds().push_back({ key, before, it->second });
+			edit.hispeeds().push_back({ id, before, it->second });
 		}
 
 		if (edit.empty())
@@ -376,16 +371,10 @@ namespace MikuMikuWorld
 
 	void HiSpeedTraits::set(Score& score, const Key& key, const std::optional<Value>& value)
 	{
-		auto&& [layer, tick] = key;
-		// Edits on the layers themselves are responsible for restoring them
-		if (!isArrayIndexInBounds(layer, score.layers))
-			return;
-
-		HiSpeedCollection& hiSpeedChanges = score.layers[layer].hiSpeedChanges;
 		if (value)
-			hiSpeedChanges.insert_or_assign(key.second, *value);
+			score.hiSpeedChanges.insert_or_assign(key, *value);
 		else
-			hiSpeedChanges.erase(key.second);
+			score.hiSpeedChanges.erase(key);
 	}
 
 	void ScoreExtensionEdit::undo(HistoryContext& ctx) const
@@ -405,6 +394,8 @@ namespace MikuMikuWorld
 		ctx.score.layers = layers.before;
 		for (const auto& change : notes)
 			change.undo(ctx);
+		for (const auto& change : hispeeds)
+			change.undo(ctx);
 	}
 
 	void LayerEdit::redo(HistoryContext& ctx) const
@@ -412,9 +403,12 @@ namespace MikuMikuWorld
 		ctx.score.layers = layers.after;
 		for (const auto& change : notes)
 			change.redo(ctx);
+		for (const auto& change : hispeeds)
+			change.redo(ctx);
 	}
 
-	LayerCapture::LayerCapture(const Score& score) : layers(score.layers)
+	LayerCapture::LayerCapture(const Score& score)
+	    : layers(score.layers), hispeeds(score.hiSpeedChanges)
 	{
 		noteLayers.reserve(score.notes.size());
 		for (const auto& [id, note] : score.notes)
@@ -423,7 +417,7 @@ namespace MikuMikuWorld
 
 	LayerEdit LayerCapture::diff(const Score& score) const
 	{
-		LayerEdit edit{ { layers, score.layers }, {} };
+		LayerEdit edit{ { layers, score.layers }, {}, {} };
 		for (const auto& [id, layer] : noteLayers)
 		{
 			auto it = score.notes.find(id);
@@ -434,6 +428,17 @@ namespace MikuMikuWorld
 			before.layer = layer;
 			edit.notes.push_back({ id, before, it->second });
 		}
+		for (const auto& [id, before] : hispeeds)
+		{
+			auto it = score.hiSpeedChanges.find(id);
+			if (it == score.hiSpeedChanges.end())
+				edit.hispeeds.push_back({ id, before, std::nullopt });
+			else if (!isSame(before, it->second))
+				edit.hispeeds.push_back({ id, before, it->second });
+		}
+		for (const auto& [id, hispeed] : score.hiSpeedChanges)
+			if (hispeeds.count(id) == 0)
+				edit.hispeeds.push_back({ id, std::nullopt, hispeed });
 		return edit;
 	}
 
