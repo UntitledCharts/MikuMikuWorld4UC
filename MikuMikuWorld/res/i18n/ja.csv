@@ -288,7 +288,7 @@ confirm, 決定
 # layer manager
 layers, レイヤー
 layer_name, 名前
-#- layer_force_note_speed,
+layer_force_note_speed, 強制ノーツスピード
 create_layer, レイヤーを作成
 show_all_layers, 全てのレイヤーを表示
 layer_rename, 名前を変更
