@@ -416,6 +416,8 @@ namespace MikuMikuWorld
 		for (int i = 0; i < noteCount; ++i)
 		{
 			Note note = readNote(LegacyNoteType::Tap, reader, version);
+			if (!isArrayIndexInBounds(note.layer, score.layers))
+				continue;
 			note.ID = nextNoteID;
 			score.notes[nextNoteID++] = note;
 		}

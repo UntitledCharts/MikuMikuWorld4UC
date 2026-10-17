@@ -1,8 +1,7 @@
 #pragma once
-#include <unordered_map>
+#include <map>
 #include <vector>
 #include <string>
-#ifdef COMPILE_ME
 
 namespace MikuMikuWorld
 {
@@ -12,10 +11,9 @@ namespace MikuMikuWorld
 		int lane;
 		int width;
 		int type;
-		std::string hiSpeedGroup;
 	};
 
-	struct BPM
+	struct SUSBPM
 	{
 		int tick;
 		float bpm;
@@ -34,21 +32,15 @@ namespace MikuMikuWorld
 		float length;
 	};
 
-	struct HiSpeed
+	struct SUSHiSpeed
 	{
 		int tick;
 		float speed;
 	};
 
-	struct HiSpeedGroup
-	{
-		std::string name;
-		std::vector<HiSpeed> hiSpeeds;
-	};
-
 	struct SUSMetadata
 	{
-		std::unordered_map<std::string, std::string> data;
+		std::map<std::string, std::string> data;
 		std::vector<std::string> requests;
 		float waveOffset;
 		float movieOffset;
@@ -66,12 +58,8 @@ namespace MikuMikuWorld
 		std::vector<SUSNote> directionals;
 		SUSNoteStream slides;
 		SUSNoteStream guides;
-		std::vector<BPM> bpms;
+		std::vector<SUSBPM> bpms;
 		std::vector<BarLength> barlengths;
-		std::vector<HiSpeedGroup> hiSpeedGroups;
-		int laneOffset;
-		bool sideLane;
+		std::vector<SUSHiSpeed> hiSpeeds;
 	};
 }
-
-#endif

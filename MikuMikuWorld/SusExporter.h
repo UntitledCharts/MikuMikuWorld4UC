@@ -1,6 +1,5 @@
 #pragma once
-
-#ifdef COMPILE_ME
+#include "IO.h"
 #include <string>
 #include <map>
 #include <vector>
@@ -8,24 +7,71 @@
 
 namespace MikuMikuWorld
 {
+	// SUS can only handle up to (36^2) - 1 unique BPMs
+	constexpr size_t MAX_BPM_IDENTIFIERS = (36ll * 36ll) - 1;
+
 	class ChannelProvider
 	{
-	  private:
+	  public:
 		struct TickRange
 		{
 			int start;
 			int end;
 		};
-		std::unordered_map<int, TickRange> channels;
 
-	  public:
 		ChannelProvider() { clear(); }
 
 		int generateChannel(int startTick, int endTick);
 		void clear();
+
+	  private:
+		std::map<int, TickRange> channels;
 	};
 
-	struct SUS;
+	class SusExportError : public std::runtime_error
+	{
+	  public:
+		SusExportError(const char* message) : std::runtime_error(message) {}
+
+		virtual ~SusExportError() = default;
+		virtual std::string_view getDetailedMessage() const = 0;
+	};
+
+	class TooManySlideChannelsError : public SusExportError
+	{
+	  public:
+		std::string_view getDetailedMessage() const { return detailedMessage; }
+
+		TooManySlideChannelsError(const ChannelProvider::TickRange& tickRange)
+		    : tickRange{ tickRange }, SusExportError("No more slide channels available")
+		{
+			detailedMessage = IO::formatString("Too many overlapping slides/guides. Exporter ran "
+			                                   "out of channels at range (%d - %d)",
+			                                   this->tickRange.start, this->tickRange.end);
+		}
+
+	  private:
+		ChannelProvider::TickRange tickRange;
+		std::string detailedMessage;
+	};
+
+	class TooManyBpmIdentifiersError : public SusExportError
+	{
+	  public:
+		TooManyBpmIdentifiersError(size_t count)
+		    : count{ count }, SusExportError("Too many BPM changes.")
+		{
+			detailedMessage =
+			    IO::formatString("Number of unique identifiers (%zu) exceeds maximum supported (%zu)",
+			                     count, MAX_BPM_IDENTIFIERS);
+		}
+
+		std::string_view getDetailedMessage() const { return detailedMessage; }
+
+	  private:
+		std::string detailedMessage;
+		size_t count{};
+	};
 
 	struct NoteMap
 	{
@@ -33,7 +79,6 @@ namespace MikuMikuWorld
 		{
 			int tick;
 			std::string data;
-			std::string hiSpeedGroup;
 		};
 
 		std::vector<RawData> data;
@@ -67,11 +112,9 @@ namespace MikuMikuWorld
 	  public:
 		SusExporter();
 
-		void appendData(int tick, std::string info, std::string data, std::string hiSpeedGroup);
+		void appendData(int tick, std::string info, std::string data);
 		void appendNoteData(const SUSNote& note, const std::string infoPrefix,
 		                    const std::string channel);
 		void dump(const SUS& sus, const std::string& filename, std::string comment = "");
 	};
 }
-
-#endif

@@ -722,7 +722,7 @@ namespace MikuMikuWorld
 		return data;
 	}
 
-	bool PySekaiEngine::canSerialize(const Score& score) { return true; }
+	Result PySekaiEngine::canSerialize(const SerializingScore& score) { return Result::Ok(); }
 
 	LevelDataEntity PySekaiEngine::toGroupEntity(const Layer& layer)
 	{

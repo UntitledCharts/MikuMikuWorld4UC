@@ -23,11 +23,9 @@ namespace MikuMikuWorld
 	};
 	static_assert(FORMAT_COUNT == FORMAT_NAMES.size());
 
-	static constexpr std::array<size_t, 5> IMPORT_AVAILABILITY = { true, false, false, false,
-		                                                           true };
+	static constexpr std::array<size_t, 5> IMPORT_AVAILABILITY = { true, false, true, true, true };
 	static_assert(FORMAT_COUNT == IMPORT_AVAILABILITY.size());
-	static constexpr std::array<size_t, 5> EXPORT_AVAILABILITY = { false, true, false, false,
-		                                                           true };
+	static constexpr std::array<size_t, 5> EXPORT_AVAILABILITY = { false, true, true, true, true };
 	static_assert(FORMAT_COUNT == EXPORT_AVAILABILITY.size());
 
 	DefaultScoreSerializeController::DefaultScoreSerializeController(SerializingScore score)
@@ -43,13 +41,9 @@ namespace MikuMikuWorld
 		};
 		checkFormat(SerializeFormat::NativeFormat, NativeScoreSerializer::canSerialize);
 		checkFormat(SerializeFormat::LegacyNativeFormat, LegacyNativeScoreSerializer::canSerialize);
-		// TODO: Add here
-		// case SerializeFormat::SusFormat:
-		//	return SusSerializer::canSerialize(score);
-		// case SerializeFormat::UscFormat:
-		//	return UscSerializer::canSerialize(score);
-		// case SerializeFormat::LvlDataFormat:
-		//	return PySekaiEngine::canSerialize(score);
+		checkFormat(SerializeFormat::SusFormat, SusSerializer::canSerialize);
+		checkFormat(SerializeFormat::UscFormat, UscSerializer::canSerialize);
+		checkFormat(SerializeFormat::LvlDataFormat, PySekaiEngine::canSerialize);
 	}
 
 	DefaultScoreSerializeController::DefaultScoreSerializeController(SerializingScore score,
@@ -71,12 +65,12 @@ namespace MikuMikuWorld
 		case SerializeFormat::LegacyNativeFormat:
 			serializer = std::make_unique<LegacyNativeScoreSerializer>();
 			break;
-			// case SerializeFormat::SusFormat:
-			//	serializer = std::make_unique<SusSerializer>();
-			//	break;
-			// case SerializeFormat::UscFormat:
-			//	serializer = std::make_unique<UscSerializer>(getConfig().minifyOutput);
-			//	break;
+		case SerializeFormat::SusFormat:
+			serializer = std::make_unique<SusSerializer>();
+			break;
+		case SerializeFormat::UscFormat:
+			serializer = std::make_unique<UscSerializer>(getConfig().minifyOutput);
+			break;
 		case SerializeFormat::LvlDataFormat:
 			serializer =
 			    std::make_unique<SonolusSerializer>(std::make_unique<PySekaiEngine>(), true, false);
@@ -222,12 +216,12 @@ namespace MikuMikuWorld
 		case SerializeFormat::LegacyNativeFormat:
 			deserializer = std::make_unique<NativeScoreSerializer>();
 			break;
-			// case SerializeFormat::SusFormat:
-			//	deserializer = std::make_unique<SusSerializer>();
-			//	break;
-			// case SerializeFormat::UscFormat:
-			//	deserializer = std::make_unique<UscSerializer>();
-			//	break;
+		case SerializeFormat::SusFormat:
+			deserializer = std::make_unique<SusSerializer>();
+			break;
+		case SerializeFormat::UscFormat:
+			deserializer = std::make_unique<UscSerializer>();
+			break;
 		case SerializeFormat::LvlDataFormat:
 			deserializer = std::make_unique<SonolusSerializer>(std::make_unique<PySekaiEngine>());
 			break;

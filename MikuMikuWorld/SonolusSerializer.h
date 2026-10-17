@@ -63,7 +63,7 @@ namespace MikuMikuWorld
 		Sonolus::LevelData serialize(const SerializingScore& data) override;
 		SerializingScore deserialize(const Sonolus::LevelData& levelData) override;
 
-		static bool canSerialize(const Score& score);
+		static Result canSerialize(const SerializingScore& score);
 
 	  private:
 		static Sonolus::LevelDataEntity toGroupEntity(const Layer& layer);
