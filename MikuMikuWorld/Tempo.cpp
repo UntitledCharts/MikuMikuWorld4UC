@@ -205,12 +205,10 @@ namespace MikuMikuWorld
 			return (toTick - fromTick) * startSpeed;
 		case HiSpeedEaseType::Linear:
 		{
-			// Solve for ax+b
-			float a = (endSpeed - startSpeed) / (endTick - startTick);
-			float b = endSpeed - endTick * a;
-			// Substitute for integral
-			auto f_int = [=](float x) { return a / 2 * std::pow(x, 2) + b * x; };
-			return f_int(toTick) - f_int(fromTick);
+			float fromSpeed =
+			    getEasedSpeed(startTick, endTick, startSpeed, endSpeed, fromTick, ease);
+			float toSpeed = getEasedSpeed(startTick, endTick, startSpeed, endSpeed, toTick, ease);
+			return (toTick - fromTick) * (fromSpeed + toSpeed) / 2;
 		}
 		default:
 			assert(false && "EaseType not supported!");
@@ -220,7 +218,7 @@ namespace MikuMikuWorld
 
 	template <typename hs_t>
 	static float impl_accumulateScaledTick(tick_t tick, id_t layer, const HiSpeedCollection& hs,
-	                                       std::multimap<layered_tick_t, hs_t*> ordHs,
+	                                       const std::multimap<layered_tick_t, hs_t*>& ordHs,
 	                                       tick_t fromTick)
 	{
 		float totalTicks = 0.0f;
@@ -228,7 +226,7 @@ namespace MikuMikuWorld
 		float lastSpeed = 1.0f;
 		HiSpeedEaseType ease = HiSpeedEaseType::None;
 		auto it = ordHs.upper_bound({ layer, fromTick }), end = ordHs.lower_bound({ layer, tick });
-		if (it != ordHs.begin())
+		if (it != ordHs.begin() && std::prev(it)->first.first == layer)
 		{
 			const HiSpeed& currHspd = *std::prev(it)->second;
 			ease = currHspd.ease;
